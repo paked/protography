@@ -1,7 +1,9 @@
 use bytes::{Buf, Bytes};
+use flate2::read::GzDecoder;
 use std::convert::TryFrom;
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::str;
 use std::str::Utf8Error;
 
@@ -23,12 +25,63 @@ fn main() {
     println!("path {}", path);
 
     let file = fs::read(path).unwrap();
-    let mut bytes = Bytes::from(file);
+    let mut bytes = Bytes::from(file.clone());
 
     let header = parse_header(&mut bytes);
     let header = header.unwrap();
 
     println!("got header: {:#?}", header);
+
+    let root_directory_start = header.root_directory_offset as usize;
+    let root_directory_end = root_directory_start + header.root_directory_length as usize;
+    let root_directory_compressed_bytes = &file[root_directory_start..root_directory_end];
+
+    let mut gz = GzDecoder::new(root_directory_compressed_bytes);
+    let mut root_directory_bytes: Vec<u8> = Vec::new();
+    gz.read_to_end(&mut root_directory_bytes).unwrap();
+    let mut bytes = Bytes::from(root_directory_bytes);
+
+    let tile_num = parse_varint(&mut bytes);
+
+    // TODO: is this faster as a data-of-arrays instead of an array-of-data?
+    let mut tile_entries = vec![TileEntry::default(); tile_num as usize];
+
+    let mut last_id = 0;
+    for (i, tile) in tile_entries.iter_mut().enumerate() {
+        let id_delta = parse_varint(&mut bytes);
+        last_id = last_id + id_delta;
+
+        tile.id = last_id;
+    }
+
+    for (i, tile) in tile_entries.iter_mut().enumerate() {
+        let run_length = parse_varint(&mut bytes);
+
+        tile.run_length = run_length;
+    }
+
+    for (i, tile) in tile_entries.iter_mut().enumerate() {
+        let length = parse_varint(&mut bytes);
+
+        tile.length = length;
+    }
+
+    let mut last_offset = 0;
+
+    // TODO: there is a bug somewhere in this code.
+    for (i, tile) in tile_entries.iter_mut().enumerate() {
+        let mut offset = parse_varint(&mut bytes);
+
+        if (offset == 0) {
+            offset = last_offset;
+        } else {
+            offset = offset - 1;
+        }
+
+        last_offset += tile.length;
+
+        tile.offset = offset;
+    }
 }
 
 // PMTiles V3 Header.
@@ -46,8 +99,8 @@ struct Header {
     number_of_tile_entires: u64,
     number_of_tile_contents: u64,
     clustered: Clustered,
-    internal_compression: u8, // TODO: convert to enum
-    tile_compression: u8,     // TODO: convert to enum,
+    internal_compression: Compression,
+    tile_compression: Compression,
     tile_type: TileType,
     min_zoom: u8,
     max_zoom: u8,
@@ -83,8 +136,8 @@ fn parse_header(bytes: &mut Bytes) -> Result<Header, ParseError> {
         number_of_tile_entires: bytes.get_u64_le(),
         number_of_tile_contents: bytes.get_u64_le(),
         clustered: Clustered::try_from(bytes.get_u8())?,
-        internal_compression: bytes.get_u8(),
-        tile_compression: bytes.get_u8(),
+        internal_compression: Compression::try_from(bytes.get_u8())?,
+        tile_compression: Compression::try_from(bytes.get_u8())?,
         tile_type: TileType::try_from(bytes.get_u8())?,
         min_zoom: bytes.get_u8(),
         max_zoom: bytes.get_u8(),
@@ -148,5 +201,79 @@ enum Compression {
     ZStd,
 }
 
+impl TryFrom<u8> for Compression {
+    type Error = ParseError;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x0 => Ok(Self::Unknown),
+            0x1 => Ok(Self::None),
+            0x2 => Ok(Self::GZip),
+            0x3 => Ok(Self::Brotli),
+            0x4 => Ok(Self::ZStd),
+            _ => Err(ParseError::InvalidValue),
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+struct TileEntry {
+    id: u64,
+    offset: u64,
+    length: u64,
+    run_length: u64,
+}
+
 #[derive(Debug)]
-struct Position {}
+struct Position {
+    lat: f64,
+    long: f64,
+}
+
+const VARINT_CONTINUATION_BIT_MASK: u8 = 0b10000000;
+
+fn parse_varint(bytes: &mut bytes::Bytes) -> u64 {
+    let mut n: u64 = 0;
+
+    let mut i = 0;
+
+    // continuation bits
+    let mut next_byte = bytes.get_u8();
+    while next_byte & VARINT_CONTINUATION_BIT_MASK != 0 && i < 7 {
+        let byte = next_byte & !VARINT_CONTINUATION_BIT_MASK;
+        n |= (byte as u64) << i * 7;
+
+        next_byte = bytes.get_u8();
+        i += 1;
+    }
+
+    // final bit
+    n |= (next_byte as u64) << i * 7;
+
+    n
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_varint() {
+        let data: Vec<u8> = vec![0b10010110, 0b00000001];
+        let mut bytes = Bytes::from(data);
+
+        let n = parse_varint(&mut bytes);
+        assert_eq!(n, 150);
+    }
+
+    #[test]
+    fn test_gzip() {
+        let bytes = fs::read("test.gz").unwrap();
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s = String::new();
+        gz.read_to_string(&mut s).unwrap();
+
+        let x = String::from("hello world\n");
+
+        assert_eq!(s, x);
+    }
+}
