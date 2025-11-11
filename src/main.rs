@@ -1,5 +1,7 @@
 use bytes::{Buf, Bytes};
 use flate2::read::GzDecoder;
+use mvt_reader;
+
 use std::convert::TryFrom;
 use std::env;
 use std::fs;
@@ -80,9 +82,26 @@ fn main() {
 
         last_offset = tile.offset;
         last_len = tile.length;
-
-        println!("{}, {}", tile.offset, value);
     }
+
+    let tile = &tile_entries[0];
+
+    let tile_data_start = (header.tile_data_offset + tile.offset) as usize;
+    let tile_data_end = tile_data_start + tile.length as usize;
+
+    let tile_data_compressed_bytes = &file[tile_data_start..tile_data_end];
+    let mut gz = GzDecoder::new(tile_data_compressed_bytes);
+    let mut tile_data_bytes: Vec<u8> = Vec::new();
+    gz.read_to_end(&mut tile_data_bytes).unwrap();
+
+    let tile_mvt = mvt_reader::Reader::new(tile_data_bytes).unwrap();
+    // Get layer names
+    let layer_names = tile_mvt.get_layer_names().unwrap();
+    for name in layer_names {
+        println!("Layer: {}", name);
+    }
+
+    println!("features: {:?}", tile_mvt.get_features(0).unwrap());
 }
 
 // PMTiles V3 Header.
