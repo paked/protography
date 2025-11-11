@@ -67,20 +67,21 @@ fn main() {
     }
 
     let mut last_offset = 0;
+    let mut last_len = 0;
 
-    // TODO: there is a bug somewhere in this code.
     for (i, tile) in tile_entries.iter_mut().enumerate() {
-        let mut offset = parse_varint(&mut bytes);
+        let value = parse_varint(&mut bytes);
 
-        if (offset == 0) {
-            offset = last_offset;
+        if value == 0 && i > 0 {
+            tile.offset = last_offset + last_len;
         } else {
-            offset = offset - 1;
+            tile.offset = value - 1;
         }
 
-        last_offset += tile.length;
+        last_offset = tile.offset;
+        last_len = tile.length;
 
-        tile.offset = offset;
+        println!("{}, {}", tile.offset, value);
     }
 }
 
