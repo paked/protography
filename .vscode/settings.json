@@ -1,5 +1,6 @@
 {
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "rust-lang.rust-analyzer",
-    "rust-analyzer.diagnostics.styleLints.enable": true
+    "rust-analyzer.diagnostics.styleLints.enable": true,
+    "rust-analyzer.check.command": "clippy"
 }
