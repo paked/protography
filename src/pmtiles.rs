@@ -36,7 +36,7 @@ pub fn decompress_range(file: &Vec<u8>, start: usize, end: usize) -> Result<Vec<
     Ok(bytes)
 }
 
-pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<Vec<TileEntry>, ParseError> {
+pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntries, ParseError> {
     let root_directory_start = header.root_directory_offset as usize;
     let root_directory_end = root_directory_start + header.root_directory_length as usize;
     let root_directory_bytes = decompress_range(&file, root_directory_start, root_directory_end)?;
@@ -83,7 +83,9 @@ pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<Vec<TileE
         last_len = tile.length;
     }
 
-    Ok(tile_entries)
+    Ok(TileEntries {
+        entries: tile_entries,
+    })
 }
 
 // PMTiles V3 Header.
@@ -223,6 +225,23 @@ pub struct TileEntry {
     pub offset: u64,
     pub length: u64,
     pub run_length: u64,
+}
+
+pub struct TileEntries {
+    pub entries: Vec<TileEntry>,
+}
+
+impl TileEntries {
+    pub fn find_tile(self: Self, id: u64) -> Option<TileEntry> {
+        // TODO: this should be a binary search, and take into account the fact that leaf entries exist
+        for tile in self.entries {
+            if tile.id == id {
+                return Some(tile);
+            }
+        }
+
+        None
+    }
 }
 
 #[derive(Debug)]

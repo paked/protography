@@ -1,12 +1,19 @@
+mod map_renderer;
 mod pmtiles;
+mod simple_vello;
+
 use pmtiles::*;
+use vello::util::RenderContext;
+use winit::event_loop::EventLoop;
 
 use std::env;
 use std::fs;
 
 use bytes::Bytes;
 
-fn main() {
+use crate::map_renderer::MapRenderer;
+
+fn test_pmtiles() -> mvt_reader::Reader {
     let args: Vec<String> = env::args().collect();
     let path = &args[1];
 
@@ -20,7 +27,7 @@ fn main() {
 
     let root_directory_entries = parse_root_directory(&file, &header).unwrap();
 
-    let tile = &root_directory_entries[0];
+    let tile = root_directory_entries.find_tile(18007234).unwrap();
 
     let tile_data_start = (header.tile_data_offset + tile.offset) as usize;
     let tile_data_end = tile_data_start + tile.length as usize;
@@ -33,5 +40,28 @@ fn main() {
         println!("Layer: {}", name);
     }
 
-    println!("features: {:?}", tile_mvt.get_features(0).unwrap());
+    tile_mvt
+
+    // let x = tile_mvt.get_features(5).unwrap();
+
+    // println!("features: {:?}", tile_mvt.get_features(0).unwrap());
+}
+
+fn main() {
+    let tile = test_pmtiles();
+
+    // Setup a bunch of state:
+    let mut app = simple_vello::SimpleVelloApp {
+        context: RenderContext::new(),
+        renderers: vec![],
+        state: simple_vello::RenderState::Suspended(None),
+        scene: vello::Scene::new(),
+        map_renderer: MapRenderer::new(tile),
+    };
+
+    // Create and run a winit event loop
+    let event_loop = EventLoop::new().unwrap();
+    event_loop
+        .run_app(&mut app)
+        .expect("Couldn't run event loop");
 }

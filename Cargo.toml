@@ -6,4 +6,8 @@ edition = "2024"
 [dependencies]
 bytes = "1.10.1"
 flate2 = "1.1.5"
+geo-types = "0.7.17"
 mvt-reader = "2.1.0"
+pollster = "0.4.0"
+vello = "0.6.0"
+winit = "0.30.12"
