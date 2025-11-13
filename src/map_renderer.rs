@@ -1,13 +1,9 @@
-use std::iter::Map;
-use std::sync::Mutex;
-
-use geo_types::{Coord, Geometry, LineString, Point, Polygon};
+use geo_types::{Geometry, LineString, Polygon};
+use mvt_reader::Reader as MvtTile;
 use mvt_reader::feature::Feature;
-use mvt_reader::{Reader as MvtTile, feature, layer};
-use vello::kurbo::{Affine, BezPath, Line, Stroke};
-use vello::low_level::Render;
+use vello::Scene;
+use vello::kurbo::{Affine, BezPath, Stroke};
 use vello::peniko::Color;
-use vello::{Scene, kurbo};
 
 pub struct RenderTargetInfo {
     pub width: u32,
@@ -23,10 +19,12 @@ impl MapRenderer {
         MapRenderer { tile }
     }
 
+    // TODO: this should be a from?
     fn path_from_line(line: &LineString<f32>, target_info: &RenderTargetInfo) -> BezPath {
         let mut path = BezPath::new();
 
         if let Some(first) = line.points().next() {
+            // TODO: this transformation should be a transformation
             let first = first / 4096.0 * target_info.width as f32;
             path.move_to((first.x(), first.y()));
 
@@ -52,17 +50,6 @@ impl MapRenderer {
         let path = MapRenderer::path_from_line(line, target_info);
 
         scene.stroke(&my_stroke, Affine::IDENTITY, my_color, None, &path);
-
-        // let mut points = line.points();
-        // let mut start = points.nth(0).unwrap() / 4096.0 * target_info.width as f32;
-
-        // for end in points {
-        //     let end = end / 4096.0 * target_info.width as f32;
-        //     let line = Line::new((start.x(), start.y()), (end.x(), end.y()));
-        //     scene.stroke(&my_stroke, Affine::IDENTITY, my_color, None, &line);
-
-        //     start = end;
-        // }
     }
 
     fn draw_polygon(
@@ -87,8 +74,6 @@ impl MapRenderer {
         );
 
         // TODO(render internal areas to, alternate rings with Fill:EvenOdd)
-
-        // self.draw_line(scene, target_info);
     }
 
     fn draw_feature(
