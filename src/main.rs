@@ -41,15 +41,14 @@ fn test_pmtiles() -> mvt_reader::Reader {
     }
 
     tile_mvt
-
-    // let x = tile_mvt.get_features(5).unwrap();
-
-    // println!("features: {:?}", tile_mvt.get_features(0).unwrap());
 }
 
 fn main() {
+    println!("loading pmtiles data");
     let tile = test_pmtiles();
+    println!("loaded pmtiles data");
 
+    println!("setting up vello app");
     // Setup a bunch of state:
     let mut app = simple_vello::SimpleVelloApp {
         context: RenderContext::new(),
@@ -58,6 +57,9 @@ fn main() {
         scene: vello::Scene::new(),
         map_renderer: MapRenderer::new(tile),
     };
+    println!("set up vello app");
+
+    println!("starting event loop");
 
     // Create and run a winit event loop
     let event_loop = EventLoop::new().unwrap();

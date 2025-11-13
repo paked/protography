@@ -232,15 +232,8 @@ pub struct TileEntries {
 }
 
 impl TileEntries {
-    pub fn find_tile(self: Self, id: u64) -> Option<TileEntry> {
-        // TODO: this should be a binary search, and take into account the fact that leaf entries exist
-        for tile in self.entries {
-            if tile.id == id {
-                return Some(tile);
-            }
-        }
-
-        None
+    pub fn find_tile(&self, id: u64) -> Option<&TileEntry> {
+        self.entries.iter().find(|e| e.id == id)
     }
 }
 
@@ -290,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_gzip() {
-        let bytes = fs::read("test.gz").unwrap();
+        let bytes = std::fs::read("test.gz").unwrap();
         let mut gz = GzDecoder::new(&bytes[..]);
         let mut s = String::new();
         gz.read_to_string(&mut s).unwrap();

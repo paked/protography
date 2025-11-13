@@ -1,3 +1,5 @@
-# protography - `.pmtiles` file parser in rust
+# protography - vector map explorations with Vello and Protomaps
 
-Do not use this. I am writing this to learn how to write Rust.
+To run: `cargo run toolangi.pmtiles`. Other pmtiles archives could work too one day.
+
+Do not use this. I am writing it to learn Rust.
