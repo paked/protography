@@ -17,6 +17,7 @@ pub enum ParseError {
     InvalidUtf8(Utf8Error),
     InvalidValue,
     IoError(std::io::Error),
+    VarintOverflowError,
 }
 
 impl From<std::io::Error> for ParseError {
@@ -43,26 +44,26 @@ pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntri
 
     let mut bytes = Bytes::from(root_directory_bytes);
 
-    let tile_num = parse_varint(&mut bytes);
+    let tile_num = parse_varint(&mut bytes)?;
 
     let mut tile_entries = vec![TileEntry::default(); tile_num as usize];
 
     let mut last_id = 0;
     for tile in tile_entries.iter_mut() {
-        let id_delta = parse_varint(&mut bytes);
+        let id_delta = parse_varint(&mut bytes)?;
         last_id = last_id + id_delta;
 
         tile.id = last_id;
     }
 
     for tile in tile_entries.iter_mut() {
-        let run_length = parse_varint(&mut bytes);
+        let run_length = parse_varint(&mut bytes)?;
 
         tile.run_length = run_length;
     }
 
     for tile in tile_entries.iter_mut() {
-        let length = parse_varint(&mut bytes);
+        let length = parse_varint(&mut bytes)?;
 
         tile.length = length;
     }
@@ -71,7 +72,7 @@ pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntri
     let mut last_len = 0;
 
     for (i, tile) in tile_entries.iter_mut().enumerate() {
-        let value = parse_varint(&mut bytes);
+        let value = parse_varint(&mut bytes)?;
 
         if value == 0 && i > 0 {
             tile.offset = last_offset + last_len;
@@ -245,27 +246,22 @@ pub struct Position {
 
 const VARINT_CONTINUATION_BIT_MASK: u8 = 0b10000000;
 
-fn parse_varint(bytes: &mut bytes::Bytes) -> u64 {
+fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64, ParseError> {
     let mut n: u64 = 0;
 
-    let mut i = 0;
+    for i in 0.. {
+        let byte = bytes.get_u8();
+        let value = (byte & !VARINT_CONTINUATION_BIT_MASK) as u64;
+        n |= value
+            .checked_shl(i * 7)
+            .ok_or(ParseError::VarintOverflowError)?;
 
-    // FIXME: throw error on overflow (and we should be able to read more than 7 bytes of input data)
-
-    // continuation bits
-    let mut next_byte = bytes.get_u8();
-    while next_byte & VARINT_CONTINUATION_BIT_MASK != 0 && i < 7 {
-        let byte = next_byte & !VARINT_CONTINUATION_BIT_MASK;
-        n |= (byte as u64) << i * 7;
-
-        next_byte = bytes.get_u8();
-        i += 1;
+        if byte & VARINT_CONTINUATION_BIT_MASK == 0 {
+            break;
+        }
     }
 
-    // final bit
-    n |= (next_byte as u64) << i * 7;
-
-    n
+    Ok(n)
 }
 
 #[cfg(test)]
@@ -273,12 +269,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_varint() {
+    fn test_parse_varint_1() {
         let data: Vec<u8> = vec![0b10010110, 0b00000001];
         let mut bytes = Bytes::from(data);
 
-        let n = parse_varint(&mut bytes);
+        let n = parse_varint(&mut bytes).expect("Should parse value");
         assert_eq!(n, 150);
+    }
+
+    #[test]
+    fn test_parse_varint_2() {
+        // this is too much data to fit in a u64, which is what we're turning our varints into.
+        let data: Vec<u8> = vec![
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
+        ];
+        let mut bytes = Bytes::from(data);
+
+        let n = parse_varint(&mut bytes);
+        assert!(n.is_err());
     }
 
     #[test]
