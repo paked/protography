@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_gzip() {
-        let bytes = std::fs::read("test.gz").unwrap();
+        let bytes = std::fs::read("test.txt.gz").unwrap();
         let mut gz = GzDecoder::new(&bytes[..]);
         let mut s = String::new();
         gz.read_to_string(&mut s).unwrap();
