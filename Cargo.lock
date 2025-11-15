@@ -461,6 +461,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast_hilbert"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "995357145df6831aab3c8d1408da05804b0a478ce93fb1740667f417b93e67e0"
+
+[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1521,6 +1527,7 @@ name = "protography"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "fast_hilbert",
  "flate2",
  "geo-types",
  "mvt-reader",

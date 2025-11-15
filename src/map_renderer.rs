@@ -41,6 +41,7 @@ impl MapRenderer {
         &mut self,
         scene: &mut Scene,
         target_info: &RenderTargetInfo,
+        transform: Affine,
         line: &LineString<f32>,
     ) {
         // TODO: refactor to use BezPath Kurbo primitive
@@ -49,29 +50,31 @@ impl MapRenderer {
 
         let path = MapRenderer::path_from_line(line, target_info);
 
-        scene.stroke(&my_stroke, Affine::IDENTITY, my_color, None, &path);
+        scene.stroke(&my_stroke, transform, my_color, None, &path);
     }
 
     fn draw_polygon(
         &mut self,
         scene: &mut Scene,
         target_info: &RenderTargetInfo,
+        transform: Affine,
         polygon: &Polygon<f32>,
     ) {
         let stroke = Stroke::new(1.0);
-        let stroke_color = Color::new([0.2, 1.0, 0.5, 1.0]);
+        let stroke_color = Color::new([0.0, 0.5, 0.0, 1.0]);
         let fill_color = Color::new([0.2, 7.0, 0.5, 0.5]);
 
         let path = MapRenderer::path_from_line(polygon.exterior(), target_info);
-        scene.stroke(&stroke, Affine::IDENTITY, stroke_color, None, &path);
 
         scene.fill(
             vello::peniko::Fill::NonZero,
-            Affine::IDENTITY,
+            transform,
             fill_color,
             None,
             &path,
         );
+
+        scene.stroke(&stroke, transform, stroke_color, None, &path);
 
         // TODO(render internal areas to, alternate rings with Fill:EvenOdd)
     }
@@ -80,25 +83,31 @@ impl MapRenderer {
         &mut self,
         scene: &mut Scene,
         target_info: &RenderTargetInfo,
+        transform: Affine,
         feature: &Feature,
     ) {
         match &feature.geometry {
             Geometry::MultiLineString(multi_line) => multi_line
                 .iter()
-                .for_each(|l| self.draw_line(scene, target_info, l)),
-            Geometry::LineString(line) => self.draw_line(scene, target_info, line),
+                .for_each(|l| self.draw_line(scene, target_info, transform, l)),
+            Geometry::LineString(line) => self.draw_line(scene, target_info, transform, line),
             Geometry::Polygon(_) => println!("got polygon"),
             Geometry::MultiPolygon(multi_polygon) => {
                 multi_polygon
                     .iter()
-                    .for_each(|p| self.draw_polygon(scene, target_info, p));
+                    .for_each(|p| self.draw_polygon(scene, target_info, transform, p));
             }
             Geometry::GeometryCollection(_) => println!("got geometry collection"),
             _ => println!("Other geoemetry value"),
         }
     }
 
-    pub fn render_to_scene(&mut self, scene: &mut Scene, target_info: &RenderTargetInfo) {
+    pub fn render_to_scene(
+        &mut self,
+        scene: &mut Scene,
+        target_info: &RenderTargetInfo,
+        transform: Affine,
+    ) {
         let layer_names = self.tile.get_layer_names().unwrap(); // FIXME
 
         let road_layer_id = layer_names.iter().position(|x| x == "roads");
@@ -115,13 +124,13 @@ impl MapRenderer {
         // FIXME: remove unwrap
         let landuse_features = self.tile.get_features(landuse_layer_id).unwrap();
         for feature in landuse_features {
-            self.draw_feature(scene, target_info, &feature);
+            self.draw_feature(scene, target_info, transform, &feature);
         }
 
         // FIXME: remove unwrap
         let road_features = self.tile.get_features(road_layer_id).unwrap();
         for feature in road_features {
-            self.draw_feature(scene, target_info, &feature);
+            self.draw_feature(scene, target_info, transform, &feature);
         }
     }
 }

@@ -139,8 +139,10 @@ impl ApplicationHandler for SimpleVelloApp {
                     height: surface.config.height,
                 };
 
+                let transform = Affine::IDENTITY.then_scale(1.0);
+
                 self.map_renderer
-                    .render_to_scene(&mut self.scene, &target_info);
+                    .render_to_scene(&mut self.scene, &target_info, transform);
 
                 // Get a handle to the device
                 let device_handle = &self.context.devices[surface.dev_id];
