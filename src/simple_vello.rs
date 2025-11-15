@@ -2,9 +2,8 @@
 // TODO: remove unwraps
 
 use std::sync::Arc;
+use std::time::Instant;
 use vello::kurbo::{Affine, Circle, Ellipse, Line, RoundedRect, Stroke};
-use vello::low_level::Render;
-use vello::peniko::Color;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
 use vello::{AaConfig, Renderer, RendererOptions, Scene};
@@ -12,11 +11,11 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
-use winit::window::Window;
+use winit::window::{self, Window};
 
 use vello::wgpu;
 
-use crate::map_renderer::{MapRenderer, RenderTargetInfo};
+use crate::map_renderer::{Camera, MapRenderer, RenderTargetInfo};
 
 #[derive(Debug)]
 pub enum RenderState {
@@ -47,6 +46,10 @@ pub struct SimpleVelloApp {
     pub scene: Scene,
 
     pub map_renderer: MapRenderer,
+
+    pub camera: Camera,
+
+    pub last_frame_time: Instant,
 }
 
 impl ApplicationHandler for SimpleVelloApp {
@@ -100,12 +103,12 @@ impl ApplicationHandler for SimpleVelloApp {
         event: WindowEvent,
     ) {
         // Only process events for our window, and only when we have a surface.
-        let (surface, valid_surface) = match &mut self.state {
+        let (surface, valid_surface, window) = match &mut self.state {
             RenderState::Active {
                 surface,
                 valid_surface,
                 window,
-            } if window.id() == window_id => (surface, valid_surface),
+            } if window.id() == window_id => (surface, valid_surface, window),
             _ => return,
         };
 
@@ -130,16 +133,29 @@ impl ApplicationHandler for SimpleVelloApp {
                     return;
                 }
 
+                window.request_redraw();
+
+                let current_frame_time = Instant::now();
+                let delta_time = current_frame_time
+                    .duration_since(self.last_frame_time)
+                    .as_secs_f64();
+                self.last_frame_time = current_frame_time;
+
                 // Empty the scene of objects to draw. You could create a new Scene each time, but in this case
                 // the same Scene is reused so that the underlying memory allocation can also be reused.
                 self.scene.reset();
+
+                self.camera.x += 100.0 * delta_time;
 
                 let target_info = RenderTargetInfo {
                     width: surface.config.width,
                     height: surface.config.height,
                 };
 
-                let transform = Affine::IDENTITY.then_scale(1.0);
+                let transform =
+                    Affine::IDENTITY.with_translation((self.camera.x, self.camera.y).into());
+
+                println!("{:#?}", self.camera.x);
 
                 self.map_renderer
                     .render_to_scene(&mut self.scene, &target_info, transform);

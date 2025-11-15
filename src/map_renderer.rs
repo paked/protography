@@ -5,7 +5,16 @@ use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Stroke};
 use vello::peniko::Color;
 
+pub const TILE_SIZE: f32 = 512.0;
+
 pub struct RenderTargetInfo {
+    pub width: u32,
+    pub height: u32,
+}
+
+pub struct Camera {
+    pub x: f64,
+    pub y: f64,
     pub width: u32,
     pub height: u32,
 }
@@ -25,11 +34,11 @@ impl MapRenderer {
 
         if let Some(first) = line.points().next() {
             // TODO: this transformation should be a transformation
-            let first = first / 4096.0 * target_info.width as f32;
+            let first = first / 4096.0 * TILE_SIZE as f32;
             path.move_to((first.x(), first.y()));
 
             for next in line.points().skip(1) {
-                let next = next / 4096.0 * target_info.width as f32;
+                let next = next / 4096.0 * TILE_SIZE as f32;
                 path.line_to((next.x(), next.y()));
             }
         }

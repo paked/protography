@@ -8,9 +8,11 @@ use winit::event_loop::EventLoop;
 
 use std::env;
 use std::fs;
+use std::time::Instant;
 
 use bytes::Bytes;
 
+use crate::map_renderer::Camera;
 use crate::map_renderer::MapRenderer;
 
 fn test_pmtiles() -> mvt_reader::Reader {
@@ -50,6 +52,13 @@ fn main() {
         state: simple_vello::RenderState::Suspended(None),
         scene: vello::Scene::new(),
         map_renderer: MapRenderer::new(tile),
+        camera: Camera {
+            x: 0.0,
+            y: 0.0,
+            width: 1,
+            height: 1,
+        },
+        last_frame_time: Instant::now(),
     };
     println!("set up vello app");
 
