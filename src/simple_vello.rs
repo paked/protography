@@ -144,7 +144,6 @@ impl ApplicationHandler for SimpleVelloApp {
                 // Empty the scene of objects to draw. You could create a new Scene each time, but in this case
                 // the same Scene is reused so that the underlying memory allocation can also be reused.
                 self.scene.reset();
-
                 self.camera.x += 100.0 * delta_time;
 
                 let target_info = RenderTargetInfo {

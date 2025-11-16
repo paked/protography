@@ -1,7 +1,9 @@
 use bytes::{Buf, Bytes};
 use flate2::read::GzDecoder;
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::hash::Hash;
 use std::io::Error;
 use std::io::Read;
 use std::str;
@@ -9,14 +11,6 @@ use std::str::Utf8Error;
 
 static EXPECTED_MAGIC: &str = "PMTiles";
 const EXPECTED_VERSION: u8 = 3;
-
-pub fn tile_to_mvt_reader(header: &Header, tile: &TileEntry, file: &Vec<u8>) -> mvt_reader::Reader {
-    let tile_data_start = (header.tile_data_offset + tile.offset) as usize;
-    let tile_data_end = tile_data_start + tile.length as usize;
-    let tile_data_bytes = decompress_range(file, tile_data_start, tile_data_end).unwrap();
-
-    mvt_reader::Reader::new(tile_data_bytes).unwrap()
-}
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -291,10 +285,11 @@ fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64, ParseError> {
     Ok(n)
 }
 
+#[derive(Copy, Clone)]
 pub struct TileCoord {
-    x: u32,
-    y: u32,
-    z: u8,
+    pub x: u32,
+    pub y: u32,
+    pub z: u8,
 }
 
 pub struct TileId(u64);
@@ -385,6 +380,48 @@ pub fn xyz_to_lat_lon(x: u32, y: u32, zoom: u8) -> Position {
     let lat = lat_rad.to_degrees();
 
     Position { lat, long: lon }
+}
+
+pub struct TileManager {
+    data: Vec<u8>,
+    pub header: Header,
+    entries: TileEntries,
+    mvts: HashMap<u64, mvt_reader::Reader>,
+}
+
+impl TileManager {
+    pub fn new(data: Vec<u8>) -> Result<Self, ParseError> {
+        let mut bytes = Bytes::from(data.clone());
+
+        let header = parse_header(&mut bytes)?;
+
+        let entries = parse_root_directory(&data, &header)?;
+
+        Ok(TileManager {
+            data,
+            header,
+            entries,
+            mvts: HashMap::new(),
+        })
+    }
+
+    fn tile_to_mvt_reader(&self, tile: &TileEntry) -> Result<mvt_reader::Reader, ParseError> {
+        let tile_data_start = (self.header.tile_data_offset + tile.offset) as usize;
+        let tile_data_end = tile_data_start + tile.length as usize;
+        let tile_data_bytes = decompress_range(&self.data, tile_data_start, tile_data_end)?;
+
+        Ok(mvt_reader::Reader::new(tile_data_bytes).unwrap())
+    }
+
+    pub fn get_tile(&self, id: TileId) -> Result<Option<mvt_reader::Reader>, ParseError> {
+        let tile = match self.entries.find_tile(id) {
+            Some(t) => t,
+            None => return Ok(None),
+        };
+
+        let mvt = self.tile_to_mvt_reader(tile)?;
+        Ok(Some(mvt))
+    }
 }
 
 #[cfg(test)]

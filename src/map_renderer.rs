@@ -15,6 +15,8 @@ pub struct RenderTargetInfo {
 pub struct Camera {
     pub x: f64,
     pub y: f64,
+    pub origin_x: f64,
+    pub origin_y: f64,
     pub width: u32,
     pub height: u32,
 }
