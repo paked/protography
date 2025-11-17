@@ -11,11 +11,12 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
-use winit::window::{self, Window};
+use winit::window::Window;
 
 use vello::wgpu;
 
-use crate::map_renderer::{Camera, MapRenderer, RenderTargetInfo};
+use crate::map_renderer::{Camera, MapRenderer, TILE_SIZEf, ZOOM};
+use crate::pmtiles::{TileCoord, TileId, TileManager};
 
 #[derive(Debug)]
 pub enum RenderState {
@@ -45,7 +46,10 @@ pub struct SimpleVelloApp {
     /// which is then passed to a renderer for rendering
     pub scene: Scene,
 
+    pub input: Input,
+
     pub map_renderer: MapRenderer,
+    pub tile_manager: TileManager,
 
     pub camera: Camera,
 
@@ -96,6 +100,21 @@ impl ApplicationHandler for SimpleVelloApp {
         }
     }
 
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                self.input.mouse_dx = delta.0;
+                self.input.mouse_dy = delta.1;
+            }
+            _ => (),
+        }
+    }
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -127,6 +146,20 @@ impl ApplicationHandler for SimpleVelloApp {
                 }
             }
 
+            WindowEvent::MouseInput {
+                device_id: _device_id,
+                state,
+                button,
+            } => match button {
+                winit::event::MouseButton::Left => {
+                    self.input.is_primary_pressed = state.is_pressed()
+                }
+                winit::event::MouseButton::Right => {
+                    self.input.is_secondary_pressed = state.is_pressed()
+                }
+                _ => (),
+            },
+
             // This is where all the rendering happens
             WindowEvent::RedrawRequested => {
                 if !*valid_surface {
@@ -144,20 +177,58 @@ impl ApplicationHandler for SimpleVelloApp {
                 // Empty the scene of objects to draw. You could create a new Scene each time, but in this case
                 // the same Scene is reused so that the underlying memory allocation can also be reused.
                 self.scene.reset();
-                self.camera.x += 100.0 * delta_time;
 
-                let target_info = RenderTargetInfo {
-                    width: surface.config.width,
-                    height: surface.config.height,
-                };
+                if self.input.is_primary_pressed {
+                    self.camera.x += self.input.mouse_dx * 5.0;
+                    self.camera.y += self.input.mouse_dy * 5.0;
 
-                let transform =
-                    Affine::IDENTITY.with_translation((self.camera.x, self.camera.y).into());
+                    self.input.mouse_dx = 0.0;
+                    self.input.mouse_dy = 0.0;
+                }
 
-                println!("{:#?}", self.camera.x);
+                self.camera.width = surface.config.width;
+                self.camera.height = surface.config.height;
 
-                self.map_renderer
-                    .render_to_scene(&mut self.scene, &target_info, transform);
+                let (min_tile, max_tile) = self.camera.get_tile_range();
+
+                let transform = Affine::IDENTITY;
+                let transform = transform.with_translation((-self.camera.x, -self.camera.y).into());
+
+                let world_origin = self.camera.world_origin();
+
+                println!("world origin: {:#?}", world_origin);
+
+                for x in min_tile.0..max_tile.0 {
+                    for y in min_tile.1..max_tile.1 {
+                        // fixme: remove unwraps
+                        let tile_coord = TileCoord { x, y, z: ZOOM };
+                        let tile_id = TileId::try_from(tile_coord).unwrap();
+                        let tile = self.tile_manager.get_tile(tile_id).unwrap();
+
+                        let tile = match tile {
+                            Some(t) => t,
+                            None => {
+                                println!(
+                                    "tried to get tile {:?}, could not find its data",
+                                    tile_coord
+                                );
+
+                                continue;
+                            }
+                        };
+
+                        let tile_x = (x - world_origin.x) as f64;
+                        let tile_y = (y - world_origin.y) as f64;
+
+                        let screen_x = tile_x * TILE_SIZEf;
+                        let screen_y = tile_y * TILE_SIZEf;
+
+                        let transform = transform.then_translate((screen_x, screen_y).into());
+
+                        self.map_renderer
+                            .render_to_scene(&tile, &mut self.scene, transform);
+                    }
+                }
 
                 // Get a handle to the device
                 let device_handle = &self.context.devices[surface.dev_id];
@@ -173,8 +244,8 @@ impl ApplicationHandler for SimpleVelloApp {
                         &surface.target_view,
                         &vello::RenderParams {
                             base_color: palette::css::BLACK, // Background color
-                            width: target_info.width,
-                            height: target_info.height,
+                            width: self.camera.width,
+                            height: self.camera.height,
                             antialiasing_method: AaConfig::Msaa16,
                         },
                     )
@@ -215,7 +286,7 @@ impl ApplicationHandler for SimpleVelloApp {
 /// Helper function that creates a Winit window and returns it (wrapped in an Arc for sharing between threads)
 fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
     let attr = Window::default_attributes()
-        .with_inner_size(LogicalSize::new(1024, 1024))
+        .with_inner_size(LogicalSize::new(768, 768))
         .with_resizable(true)
         .with_title("Vello Shapes");
     Arc::new(event_loop.create_window(attr).unwrap())
@@ -228,4 +299,13 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
         RendererOptions::default(),
     )
     .expect("Couldn't create renderer")
+}
+
+#[derive(Default)]
+pub struct Input {
+    is_primary_pressed: bool,
+    is_secondary_pressed: bool,
+
+    mouse_dx: f64,
+    mouse_dy: f64,
 }

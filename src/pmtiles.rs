@@ -118,8 +118,8 @@ pub struct Header {
     tile_type: TileType,
     min_zoom: u8,
     max_zoom: u8,
-    min_position: Position,
-    max_position: Position,
+    pub min_position: Position,
+    pub max_position: Position,
     pub center_zoom: u8,
     pub center_position: Position,
 }
@@ -285,7 +285,7 @@ fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64, ParseError> {
     Ok(n)
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TileCoord {
     pub x: u32,
     pub y: u32,
@@ -386,7 +386,6 @@ pub struct TileManager {
     data: Vec<u8>,
     pub header: Header,
     entries: TileEntries,
-    mvts: HashMap<u64, mvt_reader::Reader>,
 }
 
 impl TileManager {
@@ -401,7 +400,6 @@ impl TileManager {
             data,
             header,
             entries,
-            mvts: HashMap::new(),
         })
     }
 
@@ -410,6 +408,7 @@ impl TileManager {
         let tile_data_end = tile_data_start + tile.length as usize;
         let tile_data_bytes = decompress_range(&self.data, tile_data_start, tile_data_end)?;
 
+        // fixme: don't unwrap here
         Ok(mvt_reader::Reader::new(tile_data_bytes).unwrap())
     }
 

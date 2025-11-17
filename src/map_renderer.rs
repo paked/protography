@@ -1,46 +1,82 @@
 use geo_types::{Geometry, LineString, Polygon};
-use mvt_reader::Reader as MvtTile;
 use mvt_reader::feature::Feature;
 use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Stroke};
 use vello::peniko::Color;
 
-pub const TILE_SIZE: f32 = 512.0;
+use crate::pmtiles::{Position, TileCoord, lat_lon_to_xyz};
 
-pub struct RenderTargetInfo {
-    pub width: u32,
-    pub height: u32,
-}
+pub const TILE_SIZE: u32 = 512;
+pub const TILE_SIZEf: f64 = 512.0;
 
 pub struct Camera {
     pub x: f64,
     pub y: f64,
-    pub origin_x: f64,
-    pub origin_y: f64,
+    pub world_origin: Position,
     pub width: u32,
     pub height: u32,
 }
 
-pub struct MapRenderer {
-    tile: MvtTile,
+pub const ZOOM: u8 = 15;
+
+impl Camera {
+    fn get_tile_range_dimensions(&self) -> (u32, u32) {
+        let width_in_tiles = self.width / TILE_SIZE;
+        let height_in_tiles = self.height / TILE_SIZE;
+
+        (width_in_tiles, height_in_tiles)
+    }
+
+    pub fn world_origin(&self) -> TileCoord {
+        lat_lon_to_xyz(self.world_origin.lat, self.world_origin.long, ZOOM)
+    }
+
+    pub fn get_tile_range(&self) -> ((u32, u32), (u32, u32)) {
+        // FIXME: don't hardcode zoom
+        let TileCoord {
+            x: world_origin_x,
+            y: world_origin_y,
+            z: _,
+        } = self.world_origin();
+        let (wx, wy) = self.get_tile_range_dimensions();
+
+        let world_origin_x = world_origin_x as f64;
+        let world_origin_y = world_origin_y as f64;
+
+        let tile_x = self.x / TILE_SIZEf;
+        let tile_y = self.y / TILE_SIZEf;
+
+        let x = world_origin_x + tile_x;
+        let y = world_origin_y + tile_y;
+
+        let min_x = x.floor() as u32;
+        let min_y = y.floor() as u32;
+
+        let max_x = x.ceil() as u32 + wx;
+        let max_y = y.ceil() as u32 + wy;
+
+        ((min_x, min_y), (max_x, max_y))
+    }
 }
 
+pub struct MapRenderer {}
+
 impl MapRenderer {
-    pub fn new(tile: MvtTile) -> Self {
-        MapRenderer { tile }
+    pub fn new() -> Self {
+        MapRenderer {}
     }
 
     // TODO: this should be a from?
-    fn path_from_line(line: &LineString<f32>, target_info: &RenderTargetInfo) -> BezPath {
+    fn path_from_line(line: &LineString<f32>) -> BezPath {
         let mut path = BezPath::new();
 
         if let Some(first) = line.points().next() {
             // TODO: this transformation should be a transformation
-            let first = first / 4096.0 * TILE_SIZE as f32;
+            let first = first / 4096.0 * TILE_SIZEf as f32;
             path.move_to((first.x(), first.y()));
 
             for next in line.points().skip(1) {
-                let next = next / 4096.0 * TILE_SIZE as f32;
+                let next = next / 4096.0 * TILE_SIZEf as f32;
                 path.line_to((next.x(), next.y()));
             }
         }
@@ -48,34 +84,22 @@ impl MapRenderer {
         path
     }
 
-    fn draw_line(
-        &mut self,
-        scene: &mut Scene,
-        target_info: &RenderTargetInfo,
-        transform: Affine,
-        line: &LineString<f32>,
-    ) {
+    fn draw_line(&mut self, scene: &mut Scene, transform: Affine, line: &LineString<f32>) {
         // TODO: refactor to use BezPath Kurbo primitive
         let my_stroke = Stroke::new(6.0);
         let my_color = Color::new([0.7, 0.6, 1.0, 1.0]);
 
-        let path = MapRenderer::path_from_line(line, target_info);
+        let path = MapRenderer::path_from_line(line);
 
         scene.stroke(&my_stroke, transform, my_color, None, &path);
     }
 
-    fn draw_polygon(
-        &mut self,
-        scene: &mut Scene,
-        target_info: &RenderTargetInfo,
-        transform: Affine,
-        polygon: &Polygon<f32>,
-    ) {
+    fn draw_polygon(&mut self, scene: &mut Scene, transform: Affine, polygon: &Polygon<f32>) {
         let stroke = Stroke::new(1.0);
         let stroke_color = Color::new([0.0, 0.5, 0.0, 1.0]);
         let fill_color = Color::new([0.2, 7.0, 0.5, 0.5]);
 
-        let path = MapRenderer::path_from_line(polygon.exterior(), target_info);
+        let path = MapRenderer::path_from_line(polygon.exterior());
 
         scene.fill(
             vello::peniko::Fill::NonZero,
@@ -90,23 +114,17 @@ impl MapRenderer {
         // TODO(render internal areas to, alternate rings with Fill:EvenOdd)
     }
 
-    fn draw_feature(
-        &mut self,
-        scene: &mut Scene,
-        target_info: &RenderTargetInfo,
-        transform: Affine,
-        feature: &Feature,
-    ) {
+    fn draw_feature(&mut self, scene: &mut Scene, transform: Affine, feature: &Feature) {
         match &feature.geometry {
             Geometry::MultiLineString(multi_line) => multi_line
                 .iter()
-                .for_each(|l| self.draw_line(scene, target_info, transform, l)),
-            Geometry::LineString(line) => self.draw_line(scene, target_info, transform, line),
+                .for_each(|l| self.draw_line(scene, transform, l)),
+            Geometry::LineString(line) => self.draw_line(scene, transform, line),
             Geometry::Polygon(_) => println!("got polygon"),
             Geometry::MultiPolygon(multi_polygon) => {
                 multi_polygon
                     .iter()
-                    .for_each(|p| self.draw_polygon(scene, target_info, transform, p));
+                    .for_each(|p| self.draw_polygon(scene, transform, p));
             }
             Geometry::GeometryCollection(_) => println!("got geometry collection"),
             _ => println!("Other geoemetry value"),
@@ -115,11 +133,11 @@ impl MapRenderer {
 
     pub fn render_to_scene(
         &mut self,
+        tile: &mvt_reader::Reader,
         scene: &mut Scene,
-        target_info: &RenderTargetInfo,
         transform: Affine,
     ) {
-        let layer_names = self.tile.get_layer_names().unwrap(); // FIXME
+        let layer_names = tile.get_layer_names().unwrap(); // FIXME
 
         let road_layer_id = layer_names.iter().position(|x| x == "roads");
 
@@ -133,15 +151,15 @@ impl MapRenderer {
         };
 
         // FIXME: remove unwrap
-        let landuse_features = self.tile.get_features(landuse_layer_id).unwrap();
+        let landuse_features = tile.get_features(landuse_layer_id).unwrap();
         for feature in landuse_features {
-            self.draw_feature(scene, target_info, transform, &feature);
+            self.draw_feature(scene, transform, &feature);
         }
 
         // FIXME: remove unwrap
-        let road_features = self.tile.get_features(road_layer_id).unwrap();
+        let road_features = tile.get_features(road_layer_id).unwrap();
         for feature in road_features {
-            self.draw_feature(scene, target_info, transform, &feature);
+            self.draw_feature(scene, transform, &feature);
         }
     }
 }
