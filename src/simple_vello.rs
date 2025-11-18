@@ -179,8 +179,8 @@ impl ApplicationHandler for SimpleVelloApp {
                 self.scene.reset();
 
                 if self.input.is_primary_pressed {
-                    self.camera.x += self.input.mouse_dx * 5.0;
-                    self.camera.y += self.input.mouse_dy * 5.0;
+                    self.camera.x += -self.input.mouse_dx * 2.0;
+                    self.camera.y += -self.input.mouse_dy * 2.0;
 
                     self.input.mouse_dx = 0.0;
                     self.input.mouse_dy = 0.0;
@@ -195,8 +195,6 @@ impl ApplicationHandler for SimpleVelloApp {
                 let transform = transform.with_translation((-self.camera.x, -self.camera.y).into());
 
                 let world_origin = self.camera.world_origin();
-
-                println!("world origin: {:#?}", world_origin);
 
                 for x in min_tile.0..max_tile.0 {
                     for y in min_tile.1..max_tile.1 {
