@@ -217,8 +217,13 @@ impl ApplicationHandler for SimpleVelloApp {
                             }
                         };
 
-                        let tile_x = (x - world_origin.x) as f64;
-                        let tile_y = (y - world_origin.y) as f64;
+                        let x = x as f64;
+                        let y = y as f64;
+                        let world_origin_x = world_origin.x as f64;
+                        let world_origin_y = world_origin.y as f64;
+
+                        let tile_x = x - world_origin_x;
+                        let tile_y = y - world_origin_y;
 
                         let screen_x = tile_x * TILE_SIZEf;
                         let screen_y = tile_y * TILE_SIZEf;
