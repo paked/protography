@@ -15,7 +15,7 @@ use winit::window::Window;
 
 use vello::wgpu;
 
-use crate::map_renderer::{Camera, MapRenderer, TILE_SIZEf, ZOOM};
+use crate::map_renderer::{Camera, MapRenderer, TILE_SIZEf, TILE_ZOOM};
 use crate::pmtiles::{TileCoord, TileId, TileManager};
 
 #[derive(Debug)]
@@ -111,6 +111,12 @@ impl ApplicationHandler for SimpleVelloApp {
                 self.input.mouse_dx = delta.0;
                 self.input.mouse_dy = delta.1;
             }
+            winit::event::DeviceEvent::MouseWheel { delta } => {
+                if let winit::event::MouseScrollDelta::PixelDelta(delta) = delta {
+                    self.input.mouse_wheel_dx = delta.x;
+                    self.input.mouse_wheel_dy = delta.y;
+                }
+            }
             _ => (),
         }
     }
@@ -179,12 +185,27 @@ impl ApplicationHandler for SimpleVelloApp {
                 self.scene.reset();
 
                 if self.input.is_primary_pressed {
-                    self.camera.x += -self.input.mouse_dx * 2.0;
-                    self.camera.y += -self.input.mouse_dy * 2.0;
+                    self.camera.x +=
+                        -self.input.mouse_dx * window.scale_factor() / self.camera.zoom;
+                    self.camera.y +=
+                        -self.input.mouse_dy * window.scale_factor() / self.camera.zoom;
 
                     self.input.mouse_dx = 0.0;
                     self.input.mouse_dy = 0.0;
                 }
+
+                if self.input.mouse_wheel_dy != 0.0 {
+                    let coefficient = if self.input.mouse_wheel_dy > 0.0 {
+                        1.01
+                    } else {
+                        0.99
+                    };
+                    self.camera.zoom *= coefficient;
+
+                    self.input.mouse_wheel_dy = 0.0;
+                }
+
+                println!("fps: {}, zoom: {}", 1.0 / delta_time, self.camera.zoom);
 
                 self.camera.width = surface.config.width;
                 self.camera.height = surface.config.height;
@@ -199,17 +220,17 @@ impl ApplicationHandler for SimpleVelloApp {
                 for x in min_tile.0..max_tile.0 {
                     for y in min_tile.1..max_tile.1 {
                         // fixme: remove unwraps
-                        let tile_coord = TileCoord { x, y, z: ZOOM };
+                        let tile_coord = TileCoord { x, y, z: TILE_ZOOM };
                         let tile_id = TileId::try_from(tile_coord).unwrap();
                         let tile = self.tile_manager.get_tile(tile_id).unwrap();
 
                         let tile = match tile {
                             Some(t) => t,
                             None => {
-                                println!(
-                                    "tried to get tile {:?}, could not find its data",
-                                    tile_coord
-                                );
+                                // println!(
+                                //     "tried to get tile {:?}, could not find its data",
+                                //     tile_coord
+                                // );
 
                                 continue;
                             }
@@ -226,7 +247,9 @@ impl ApplicationHandler for SimpleVelloApp {
                         let screen_x = tile_x * TILE_SIZEf;
                         let screen_y = tile_y * TILE_SIZEf;
 
-                        let transform = transform.then_translate((screen_x, screen_y).into());
+                        let transform = transform
+                            .then_translate((screen_x, screen_y).into())
+                            .then_scale(self.camera.zoom);
 
                         self.map_renderer
                             .render_to_scene(&tile, &mut self.scene, transform);
@@ -311,4 +334,7 @@ pub struct Input {
 
     mouse_dx: f64,
     mouse_dy: f64,
+
+    mouse_wheel_dx: f64,
+    mouse_wheel_dy: f64,
 }

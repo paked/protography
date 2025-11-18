@@ -12,23 +12,26 @@ pub const TILE_SIZEf: f64 = 512.0;
 pub struct Camera {
     pub x: f64,
     pub y: f64,
+    pub zoom: f64,
     pub world_origin: Position,
     pub width: u32,
     pub height: u32,
 }
 
-pub const ZOOM: u8 = 15;
+pub const TILE_ZOOM: u8 = 15;
 
 impl Camera {
     fn get_tile_range_dimensions(&self) -> (u32, u32) {
-        let width_in_tiles = self.width / TILE_SIZE;
-        let height_in_tiles = self.height / TILE_SIZE;
+        let tile_in_pixels = (TILE_SIZEf * self.zoom) as u32;
+
+        let width_in_tiles = self.width / tile_in_pixels;
+        let height_in_tiles = self.height / tile_in_pixels;
 
         (width_in_tiles, height_in_tiles)
     }
 
     pub fn world_origin(&self) -> TileCoord {
-        lat_lon_to_xyz(self.world_origin.lat, self.world_origin.long, ZOOM)
+        lat_lon_to_xyz(self.world_origin.lat, self.world_origin.long, TILE_ZOOM)
     }
 
     pub fn get_tile_range(&self) -> ((u32, u32), (u32, u32)) {

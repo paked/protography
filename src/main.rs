@@ -38,6 +38,7 @@ fn main() {
         camera: Camera {
             x: 0.0,
             y: 0.0,
+            zoom: 1.0,
             world_origin,
             width: 1,
             height: 1,
