@@ -22,10 +22,10 @@ pub const TILE_ZOOM: u8 = 15;
 
 impl Camera {
     fn get_tile_range_dimensions(&self) -> (u32, u32) {
-        let tile_in_pixels = (TILE_SIZEf * self.zoom) as u32;
+        let tile_in_pixels = (TILE_SIZEf * self.zoom).ceil() as u32;
 
-        let width_in_tiles = self.width / tile_in_pixels;
-        let height_in_tiles = self.height / tile_in_pixels;
+        let width_in_tiles = self.width / tile_in_pixels + 1;
+        let height_in_tiles = self.height / tile_in_pixels + 1;
 
         (width_in_tiles, height_in_tiles)
     }
