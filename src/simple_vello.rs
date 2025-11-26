@@ -217,6 +217,15 @@ impl ApplicationHandler for SimpleVelloApp {
 
                 let world_origin = self.camera.world_origin();
 
+                let zoom_pivot = vello::kurbo::Vec2::new(
+                    self.camera.width as f64 / 2.0,
+                    self.camera.height as f64 / 2.0,
+                );
+
+                let zoom = Affine::translate(zoom_pivot)
+                    * Affine::scale(self.camera.zoom)
+                    * Affine::translate(-zoom_pivot);
+
                 for x in min_tile.0..max_tile.0 {
                     for y in min_tile.1..max_tile.1 {
                         // fixme: remove unwraps
@@ -247,9 +256,8 @@ impl ApplicationHandler for SimpleVelloApp {
                         let screen_x = tile_x * TILE_SIZEf;
                         let screen_y = tile_y * TILE_SIZEf;
 
-                        let transform = transform
-                            .then_translate((screen_x, screen_y).into())
-                            .then_scale(self.camera.zoom);
+                        let transform =
+                            zoom * transform.then_translate((screen_x, screen_y).into());
 
                         self.map_renderer
                             .render_to_scene(&tile, &mut self.scene, transform);

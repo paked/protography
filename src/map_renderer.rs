@@ -24,8 +24,8 @@ impl Camera {
     fn get_tile_range_dimensions(&self) -> (u32, u32) {
         let tile_in_pixels = (TILE_SIZEf * self.zoom).ceil() as u32;
 
-        let width_in_tiles = self.width / tile_in_pixels + 1;
-        let height_in_tiles = self.height / tile_in_pixels + 1;
+        let width_in_tiles = self.width / tile_in_pixels;
+        let height_in_tiles = self.height / tile_in_pixels;
 
         (width_in_tiles, height_in_tiles)
     }
@@ -42,6 +42,8 @@ impl Camera {
             z: _,
         } = self.world_origin();
         let (wx, wy) = self.get_tile_range_dimensions();
+        let wx = wx as f64;
+        let wy = wy as f64;
 
         let world_origin_x = world_origin_x as f64;
         let world_origin_y = world_origin_y as f64;
@@ -52,11 +54,11 @@ impl Camera {
         let x = world_origin_x + tile_x;
         let y = world_origin_y + tile_y;
 
-        let min_x = x.floor() as u32;
-        let min_y = y.floor() as u32;
+        let min_x = (x - wx / 2.0).floor() as u32;
+        let min_y = (y - wy / 2.0).floor() as u32;
 
-        let max_x = x.ceil() as u32 + wx;
-        let max_y = y.ceil() as u32 + wy;
+        let max_x = (x + wx / 2.0).ceil() as u32 + 2;
+        let max_y = (y + wy / 2.0).ceil() as u32 + 2;
 
         ((min_x, min_y), (max_x, max_y))
     }
