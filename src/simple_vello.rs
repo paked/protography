@@ -213,7 +213,8 @@ impl ApplicationHandler for SimpleVelloApp {
                 let (min_tile, max_tile) = self.camera.get_tile_range();
 
                 let transform = Affine::IDENTITY;
-                let transform = transform.with_translation((-self.camera.x, -self.camera.y).into());
+                let transform = transform.with_translation((-self.camera.x, -self.camera.y).into())
+                    * Affine::scale(self.camera.get_tile_size_multipler());
 
                 let world_origin = self.camera.world_origin();
 
@@ -226,10 +227,22 @@ impl ApplicationHandler for SimpleVelloApp {
                     * Affine::scale(self.camera.zoom)
                     * Affine::translate(-zoom_pivot);
 
+                println!("hi: {}", self.camera.get_tile_size_in_world_pixels());
+
+                println!(
+                    "min: {:?} max: {:?}",
+                    max_tile.0 - min_tile.0,
+                    max_tile.1 - min_tile.1
+                );
+
                 for x in min_tile.0..max_tile.0 {
                     for y in min_tile.1..max_tile.1 {
                         // fixme: remove unwraps
-                        let tile_coord = TileCoord { x, y, z: TILE_ZOOM };
+                        let tile_coord = TileCoord {
+                            x,
+                            y,
+                            z: world_origin.z,
+                        };
                         let tile_id = TileId::try_from(tile_coord).unwrap();
                         let tile = self.tile_manager.get_tile(tile_id).unwrap();
 
@@ -253,8 +266,8 @@ impl ApplicationHandler for SimpleVelloApp {
                         let tile_x = x - world_origin_x;
                         let tile_y = y - world_origin_y;
 
-                        let screen_x = tile_x * TILE_SIZEf;
-                        let screen_y = tile_y * TILE_SIZEf;
+                        let screen_x = tile_x * self.camera.get_tile_size_in_world_pixels();
+                        let screen_y = tile_y * self.camera.get_tile_size_in_world_pixels();
 
                         let transform =
                             zoom * transform.then_translate((screen_x, screen_y).into());

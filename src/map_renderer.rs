@@ -21,8 +21,16 @@ pub struct Camera {
 pub const TILE_ZOOM: u8 = 15;
 
 impl Camera {
+    pub fn get_tile_size_in_world_pixels(&self) -> f64 {
+        TILE_SIZEf * self.get_tile_size_multipler()
+    }
+
+    pub fn get_tile_size_multipler(&self) -> f64 {
+        if self.zoom < 0.5 { 2.0 } else { 1.0 }
+    }
+
     fn get_tile_range_dimensions(&self) -> (u32, u32) {
-        let tile_in_pixels = (TILE_SIZEf * self.zoom).ceil() as u32;
+        let tile_in_pixels = (self.get_tile_size_in_world_pixels() * self.zoom) as u32;
 
         let width_in_tiles = self.width / tile_in_pixels;
         let height_in_tiles = self.height / tile_in_pixels;
@@ -30,8 +38,16 @@ impl Camera {
         (width_in_tiles, height_in_tiles)
     }
 
+    pub fn get_slippy_zoom(&self) -> u8 {
+        if self.zoom < 0.5 { 14 } else { 15 }
+    }
+
     pub fn world_origin(&self) -> TileCoord {
-        lat_lon_to_xyz(self.world_origin.lat, self.world_origin.long, TILE_ZOOM)
+        lat_lon_to_xyz(
+            self.world_origin.lat,
+            self.world_origin.long,
+            self.get_slippy_zoom(),
+        )
     }
 
     pub fn get_tile_range(&self) -> ((u32, u32), (u32, u32)) {
@@ -48,8 +64,8 @@ impl Camera {
         let world_origin_x = world_origin_x as f64;
         let world_origin_y = world_origin_y as f64;
 
-        let tile_x = self.x / TILE_SIZEf;
-        let tile_y = self.y / TILE_SIZEf;
+        let tile_x = self.x / self.get_tile_size_in_world_pixels();
+        let tile_y = self.y / self.get_tile_size_in_world_pixels();
 
         let x = world_origin_x + tile_x;
         let y = world_origin_y + tile_y;
