@@ -28,6 +28,7 @@ impl Camera {
     }
 
     pub fn get_tile_size_multipler(&self) -> f64 {
+        // TODO: write this in a more scalable way
         if self.zoom > 0.5 {
             1.0
         } else if self.zoom > 0.25 {
@@ -46,8 +47,6 @@ impl Camera {
         let height_in_tiles = self.height / tile_in_pixels;
 
         (width_in_tiles, height_in_tiles)
-
-        // (10, 10)
     }
 
     // pub fn toggle_zoom(&mut self) {
@@ -55,6 +54,7 @@ impl Camera {
     // }
 
     pub fn get_slippy_zoom(&self) -> u8 {
+        // TODO: write this in a more scalable way
         15 - if self.zoom > 0.5 {
             1
         } else if self.zoom > 0.25 {
@@ -75,7 +75,6 @@ impl Camera {
     }
 
     pub fn get_tile_range(&self) -> ((u32, u32), (u32, u32)) {
-        // FIXME: don't hardcode zoom
         let TileCoord {
             x: world_origin_x,
             y: world_origin_y,
@@ -91,6 +90,8 @@ impl Camera {
 
         let x = world_origin_x + tile_x;
         let y = world_origin_y + tile_y;
+
+        // TODO: why does zooming cause this calculation to be off by a bit?
 
         let min_x = x.floor() as u32 - 1;
         let min_y = y.floor() as u32 - 1;
