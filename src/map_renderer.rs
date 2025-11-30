@@ -1,7 +1,7 @@
 use geo_types::{Geometry, LineString, Polygon};
 use mvt_reader::feature::Feature;
 use vello::Scene;
-use vello::kurbo::{Affine, BezPath, Stroke};
+use vello::kurbo::{Affine, BezPath, Rect, Stroke};
 use vello::peniko::Color;
 
 use crate::pmtiles::{Position, TileCoord, lat_lon_to_xyz};
@@ -16,6 +16,8 @@ pub struct Camera {
     pub world_origin: Position,
     pub width: u32,
     pub height: u32,
+    // pub controlled_tile_size: bool,
+    // pub toggle_zoom_counter: u8,
 }
 
 pub const TILE_ZOOM: u8 = 15;
@@ -26,7 +28,15 @@ impl Camera {
     }
 
     pub fn get_tile_size_multipler(&self) -> f64 {
-        if self.zoom < 0.5 { 2.0 } else { 1.0 }
+        if self.zoom > 0.5 {
+            1.0
+        } else if self.zoom > 0.25 {
+            2.0
+        } else if self.zoom > 0.125 {
+            3.0
+        } else {
+            4.0
+        }
     }
 
     fn get_tile_range_dimensions(&self) -> (u32, u32) {
@@ -36,10 +46,24 @@ impl Camera {
         let height_in_tiles = self.height / tile_in_pixels;
 
         (width_in_tiles, height_in_tiles)
+
+        // (10, 10)
     }
 
+    // pub fn toggle_zoom(&mut self) {
+    //     self.toggle_zoom_counter = (self.toggle_zoom_counter + 1) % 3;
+    // }
+
     pub fn get_slippy_zoom(&self) -> u8 {
-        if self.zoom < 0.5 { 14 } else { 15 }
+        15 - if self.zoom > 0.5 {
+            1
+        } else if self.zoom > 0.25 {
+            2
+        } else if self.zoom > 0.125 {
+            3
+        } else {
+            4
+        }
     }
 
     pub fn world_origin(&self) -> TileCoord {
@@ -57,12 +81,10 @@ impl Camera {
             y: world_origin_y,
             z: _,
         } = self.world_origin();
+
         let (wx, wy) = self.get_tile_range_dimensions();
         let wx = wx as f64;
         let wy = wy as f64;
-
-        let world_origin_x = world_origin_x as f64;
-        let world_origin_y = world_origin_y as f64;
 
         let tile_x = self.x / self.get_tile_size_in_world_pixels();
         let tile_y = self.y / self.get_tile_size_in_world_pixels();
@@ -70,11 +92,11 @@ impl Camera {
         let x = world_origin_x + tile_x;
         let y = world_origin_y + tile_y;
 
-        let min_x = (x - wx / 2.0).floor() as u32;
-        let min_y = (y - wy / 2.0).floor() as u32;
+        let min_x = x.floor() as u32 - 1;
+        let min_y = y.floor() as u32 - 1;
 
-        let max_x = (x + wx / 2.0).ceil() as u32 + 2;
-        let max_y = (y + wy / 2.0).ceil() as u32 + 2;
+        let max_x = (x + wx).ceil() as u32 + 1;
+        let max_y = (y + wy).ceil() as u32 + 1;
 
         ((min_x, min_y), (max_x, max_y))
     }
@@ -182,5 +204,15 @@ impl MapRenderer {
         for feature in road_features {
             self.draw_feature(scene, transform, &feature);
         }
+
+        let my_stroke = Stroke::new(6.0);
+        let my_color = Color::new([1.0, 0.3, 0.3, 1.0]);
+        scene.stroke(
+            &my_stroke,
+            transform,
+            my_color,
+            None,
+            &Rect::new(0.0, 0.0, TILE_SIZEf, TILE_SIZEf),
+        );
     }
 }

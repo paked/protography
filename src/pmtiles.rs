@@ -287,9 +287,21 @@ fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64, ParseError> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct TileCoord {
-    pub x: u32,
-    pub y: u32,
+    pub x: f64,
+    pub y: f64,
     pub z: u8,
+}
+
+// TODO(harrisons): maybe should differentiate between a "perfect tile coordinate" and a "fractional one"?
+impl TileCoord {
+    // TODO: is there a better name for this
+    pub fn ix(&self) -> u32 {
+        self.x.floor() as u32
+    }
+
+    pub fn iy(&self) -> u32 {
+        self.y.floor() as u32
+    }
 }
 
 pub struct TileId(u64);
@@ -299,10 +311,13 @@ impl TryFrom<TileCoord> for TileId {
 
     // implementation stolen/inspired by https://github.com/arma-place/pmtiles-rs, under MIT license
     fn try_from(value: TileCoord) -> Result<Self, Self::Error> {
-        let TileCoord { x, y, z } = value;
+        let TileCoord { z, .. } = value;
         if z > MAX_Z {
             return Err(ParseError::TooHighZIndex);
         }
+
+        let x = value.ix();
+        let y = value.iy();
 
         // FIXME: precompute this
         let base_id: u64 = 1 + (1..z).map(|i| 4u64.pow(u32::from(i))).sum::<u64>();
@@ -320,7 +335,11 @@ impl TryFrom<TileId> for TileCoord {
     // implementation stolen/inspired by https://github.com/arma-place/pmtiles-rs, under MIT license
     fn try_from(id: TileId) -> Result<Self, Self::Error> {
         if id.0 == 0 {
-            return Ok(TileCoord { x: 0, y: 0, z: 0 });
+            return Ok(TileCoord {
+                x: 0.0,
+                y: 0.0,
+                z: 0,
+            });
         }
 
         // TODO: pre-compute these base_id and z values
@@ -331,7 +350,11 @@ impl TryFrom<TileId> for TileCoord {
 
         let (x, y) = fast_hilbert::h2xy::<u32>(id.0 - base_id, z);
 
-        Ok(TileCoord { x, y, z })
+        Ok(TileCoord {
+            x: x as f64,
+            y: y as f64,
+            z,
+        })
     }
 }
 
@@ -363,8 +386,8 @@ pub fn lat_lon_to_xyz(lat: f64, lon: f64, zoom: u8) -> TileCoord {
     let lat_rad = lat.to_radians();
     let n = 2f64.powi(zoom as i32);
 
-    let x = ((lon + 180.0) / 360.0 * n).floor() as u32;
-    let y = ((1.0 - (lat_rad.tan().asinh() / std::f64::consts::PI)) / 2.0 * n).floor() as u32;
+    let x = ((lon + 180.0) / 360.0 * n)/*.floor() as u32*/;
+    let y = ((1.0 - (lat_rad.tan().asinh() / std::f64::consts::PI)) / 2.0 * n)/*.floor() as u32*/;
 
     TileCoord { x, y, z: zoom }
 }

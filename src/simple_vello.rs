@@ -3,14 +3,18 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use vello::kurbo::{Affine, Circle, Ellipse, Line, RoundedRect, Stroke};
+use vello::kurbo::{Affine, Circle, Ellipse, Line, Rect, RoundedRect, Stroke};
+use vello::peniko::Color;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
+use vello::wgpu::wgc::command::TransferError;
 use vello::{AaConfig, Renderer, RendererOptions, Scene};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::WindowEvent;
+use winit::event::{self, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::{Key, NamedKey};
+use winit::platform::scancode;
 use winit::window::Window;
 
 use vello::wgpu;
@@ -166,6 +170,14 @@ impl ApplicationHandler for SimpleVelloApp {
                 _ => (),
             },
 
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let Key::Named(key) = event.logical_key {
+                    if key == NamedKey::Space {
+                        self.input.is_space_pressed = event.state.is_pressed() && !event.repeat;
+                    }
+                }
+            }
+
             // This is where all the rendering happens
             WindowEvent::RedrawRequested => {
                 if !*valid_surface {
@@ -205,16 +217,27 @@ impl ApplicationHandler for SimpleVelloApp {
                     self.input.mouse_wheel_dy = 0.0;
                 }
 
+                // if self.input.is_space_pressed {
+                //     self.camera.toggle_zoom();
+                //     self.input.is_space_pressed = false;
+                // }
+
                 println!("fps: {}, zoom: {}", 1.0 / delta_time, self.camera.zoom);
+
+                println!(
+                    "tile size world pixels {}",
+                    self.camera.get_tile_size_in_world_pixels()
+                );
+
+                println!("tile size range {:?}", self.camera.get_tile_range());
 
                 self.camera.width = surface.config.width;
                 self.camera.height = surface.config.height;
 
                 let (min_tile, max_tile) = self.camera.get_tile_range();
 
-                let transform = Affine::IDENTITY;
-                let transform = transform.with_translation((-self.camera.x, -self.camera.y).into())
-                    * Affine::scale(self.camera.get_tile_size_multipler());
+                let transform = Affine::translate((-self.camera.x, -self.camera.y));
+                let transform = transform * Affine::scale(self.camera.get_tile_size_multipler());
 
                 let world_origin = self.camera.world_origin();
 
@@ -227,20 +250,16 @@ impl ApplicationHandler for SimpleVelloApp {
                     * Affine::scale(self.camera.zoom)
                     * Affine::translate(-zoom_pivot);
 
-                println!("hi: {}", self.camera.get_tile_size_in_world_pixels());
+                let tile_size = self.camera.get_tile_size_in_world_pixels();
 
-                println!(
-                    "min: {:?} max: {:?}",
-                    max_tile.0 - min_tile.0,
-                    max_tile.1 - min_tile.1
-                );
+                println!("x: {:?} y: {:?}", self.camera.x, self.camera.y);
 
                 for x in min_tile.0..max_tile.0 {
                     for y in min_tile.1..max_tile.1 {
                         // fixme: remove unwraps
                         let tile_coord = TileCoord {
-                            x,
-                            y,
+                            x: x as f64,
+                            y: y as f64,
                             z: world_origin.z,
                         };
                         let tile_id = TileId::try_from(tile_coord).unwrap();
@@ -260,22 +279,35 @@ impl ApplicationHandler for SimpleVelloApp {
 
                         let x = x as f64;
                         let y = y as f64;
-                        let world_origin_x = world_origin.x as f64;
-                        let world_origin_y = world_origin.y as f64;
+                        let world_origin_x = world_origin.x;
+                        let world_origin_y = world_origin.y;
 
                         let tile_x = x - world_origin_x;
                         let tile_y = y - world_origin_y;
 
-                        let screen_x = tile_x * self.camera.get_tile_size_in_world_pixels();
-                        let screen_y = tile_y * self.camera.get_tile_size_in_world_pixels();
+                        let screen_x = tile_x * tile_size;
+                        let screen_y = tile_y * tile_size;
 
-                        let transform =
-                            zoom * transform.then_translate((screen_x, screen_y).into());
+                        let transform = Affine::translate((screen_x, screen_y)) * transform;
+                        let transform = zoom * transform;
 
                         self.map_renderer
                             .render_to_scene(&tile, &mut self.scene, transform);
                     }
                 }
+
+                let origin_transform = Affine::translate((0.0, 0.0)) * transform;
+                let origin_transform = zoom * origin_transform;
+
+                let my_stroke = Stroke::new(6.0);
+                let my_color = Color::new([1.0, 1.0, 1.0, 1.0]);
+                self.scene.stroke(
+                    &my_stroke,
+                    origin_transform,
+                    my_color,
+                    None,
+                    &Circle::new((0.0, 0.0), 10.0),
+                );
 
                 // Get a handle to the device
                 let device_handle = &self.context.devices[surface.dev_id];
@@ -335,7 +367,7 @@ fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
     let attr = Window::default_attributes()
         .with_inner_size(LogicalSize::new(768, 768))
         .with_resizable(true)
-        .with_title("Vello Shapes");
+        .with_title("Protography");
     Arc::new(event_loop.create_window(attr).unwrap())
 }
 
@@ -358,4 +390,6 @@ pub struct Input {
 
     mouse_wheel_dx: f64,
     mouse_wheel_dy: f64,
+
+    is_space_pressed: bool,
 }
