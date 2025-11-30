@@ -22,22 +22,42 @@ pub struct Camera {
 
 pub const TILE_ZOOM: u8 = 15;
 
+// TODO: these small values of zoom are probably not usable. find a better way to represent this
+const ZOOM_LEVELS_LUT: [f64; 15] = [
+    0.00006103515625,
+    0.0001220703125,
+    0.000244140625,
+    0.00048828125,
+    0.0009765625,
+    0.001953125,
+    0.00390625,
+    0.0078125,
+    0.015625,
+    0.03125,
+    0.0625,
+    0.125,
+    0.25,
+    0.5,
+    1.0,
+];
+
+fn get_zoom_level(zoom: f64) -> usize {
+    if zoom >= *ZOOM_LEVELS_LUT.last().unwrap() {
+        return ZOOM_LEVELS_LUT.len() - 1;
+    }
+
+    ZOOM_LEVELS_LUT.iter().position(|&z| zoom <= z).unwrap()
+}
+
 impl Camera {
     pub fn get_tile_size_in_world_pixels(&self) -> f64 {
         TILE_SIZEf * self.get_tile_size_multipler()
     }
 
     pub fn get_tile_size_multipler(&self) -> f64 {
-        // TODO: write this in a more scalable way
-        if self.zoom > 0.5 {
-            1.0
-        } else if self.zoom > 0.25 {
-            2.0
-        } else if self.zoom > 0.125 {
-            3.0
-        } else {
-            4.0
-        }
+        let pos = ZOOM_LEVELS_LUT.len() - get_zoom_level(self.zoom);
+
+        pos as f64
     }
 
     fn get_tile_range_dimensions(&self) -> (u32, u32) {
@@ -49,21 +69,10 @@ impl Camera {
         (width_in_tiles, height_in_tiles)
     }
 
-    // pub fn toggle_zoom(&mut self) {
-    //     self.toggle_zoom_counter = (self.toggle_zoom_counter + 1) % 3;
-    // }
-
     pub fn get_slippy_zoom(&self) -> u8 {
-        // TODO: write this in a more scalable way
-        15 - if self.zoom > 0.5 {
-            1
-        } else if self.zoom > 0.25 {
-            2
-        } else if self.zoom > 0.125 {
-            3
-        } else {
-            4
-        }
+        let z = get_zoom_level(self.zoom);
+
+        z as u8
     }
 
     pub fn world_origin(&self) -> TileCoord {
@@ -155,7 +164,7 @@ impl MapRenderer {
 
         scene.stroke(&stroke, transform, stroke_color, None, &path);
 
-        // TODO(render internal areas to, alternate rings with Fill:EvenOdd)
+        // TODO(render internal areas too, alternate rings with Fill:EvenOdd)
     }
 
     fn draw_feature(&mut self, scene: &mut Scene, transform: Affine, feature: &Feature) {
