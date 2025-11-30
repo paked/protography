@@ -194,6 +194,13 @@ impl MapRenderer {
             return;
         };
 
+        let hairline_compensation = 0.5;
+        scene.push_clip_layer(
+            transform,
+            &Rect::new(0.0, 0.0, TILE_SIZEf, TILE_SIZEf)
+                .inflate(hairline_compensation, hairline_compensation),
+        );
+
         // FIXME: remove unwrap
         let landuse_features = tile.get_features(landuse_layer_id).unwrap();
         for feature in landuse_features {
@@ -206,14 +213,6 @@ impl MapRenderer {
             self.draw_feature(scene, transform, &feature);
         }
 
-        let my_stroke = Stroke::new(6.0);
-        let my_color = Color::new([1.0, 0.3, 0.3, 1.0]);
-        scene.stroke(
-            &my_stroke,
-            transform,
-            my_color,
-            None,
-            &Rect::new(0.0, 0.0, TILE_SIZEf, TILE_SIZEf),
-        );
+        scene.pop_layer();
     }
 }
