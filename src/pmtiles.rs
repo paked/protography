@@ -487,16 +487,16 @@ mod tests {
     fn test_tile_xyz_from_id() {
         let tile_coord = TileCoord::try_from(TileId(18007234)).expect("Should be convertible");
 
-        assert_eq!(tile_coord.x, 3702);
-        assert_eq!(tile_coord.y, 2509);
+        assert_eq!(tile_coord.ix(), 3702);
+        assert_eq!(tile_coord.iy(), 2509);
         assert_eq!(tile_coord.z, 12);
     }
 
     #[test]
     fn test_tile_id_from_xyz() {
         let tile_coord = TileCoord {
-            x: 3702,
-            y: 2509,
+            x: 3702.0,
+            y: 2509.0,
             z: 12,
         };
 

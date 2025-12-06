@@ -217,10 +217,11 @@ impl ApplicationHandler for SimpleVelloApp {
                     self.input.mouse_wheel_dy = 0.0;
                 }
 
-                // if self.input.is_space_pressed {
-                //     self.camera.toggle_zoom();
-                //     self.input.is_space_pressed = false;
-                // }
+                if self.input.is_space_pressed {
+                    self.camera.zoom += 0.0005;
+
+                    self.input.is_space_pressed = false;
+                }
 
                 println!("fps: {}, zoom: {}", 1.0 / delta_time, self.camera.zoom);
 
@@ -241,18 +242,20 @@ impl ApplicationHandler for SimpleVelloApp {
 
                 let world_origin = self.camera.world_origin();
 
-                let zoom_pivot = vello::kurbo::Vec2::new(
-                    self.camera.width as f64 / 2.0,
-                    self.camera.height as f64 / 2.0,
-                );
-
-                let zoom = Affine::translate(zoom_pivot)
-                    * Affine::scale(self.camera.zoom)
-                    * Affine::translate(-zoom_pivot);
+                let zoom = Affine::scale(self.camera.zoom);
 
                 let tile_size = self.camera.get_tile_size_in_world_pixels();
 
-                println!("x: {:?} y: {:?}", self.camera.x, self.camera.y);
+                println!(
+                    "x: {:?} y: {:?} z: {}",
+                    self.camera.x,
+                    self.camera.y,
+                    self.camera.get_slippy_zoom()
+                );
+                println!(
+                    "tile size mulitplier {}",
+                    self.camera.get_tile_size_multipler()
+                );
 
                 for x in min_tile.0..max_tile.0 {
                     for y in min_tile.1..max_tile.1 {
@@ -268,11 +271,6 @@ impl ApplicationHandler for SimpleVelloApp {
                         let tile = match tile {
                             Some(t) => t,
                             None => {
-                                // println!(
-                                //     "tried to get tile {:?}, could not find its data",
-                                //     tile_coord
-                                // );
-
                                 continue;
                             }
                         };
@@ -291,6 +289,11 @@ impl ApplicationHandler for SimpleVelloApp {
                         let transform = Affine::translate((screen_x, screen_y)) * transform;
                         let transform = zoom * transform;
 
+                        let transform = Affine::translate((
+                            (self.camera.width / 2) as f64,
+                            (self.camera.height / 2) as f64,
+                        )) * transform;
+
                         self.map_renderer
                             .render_to_scene(&tile, &mut self.scene, transform);
                     }
@@ -298,6 +301,10 @@ impl ApplicationHandler for SimpleVelloApp {
 
                 let origin_transform = Affine::translate((0.0, 0.0)) * transform;
                 let origin_transform = zoom * origin_transform;
+                let origin_transform = Affine::translate((
+                    (self.camera.width / 2) as f64,
+                    (self.camera.height / 2) as f64,
+                )) * origin_transform;
 
                 let my_stroke = Stroke::new(6.0);
                 let my_color = Color::new([1.0, 1.0, 1.0, 1.0]);

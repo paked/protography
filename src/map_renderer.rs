@@ -55,22 +55,23 @@ impl Camera {
     }
 
     pub fn get_tile_size_multipler(&self) -> f64 {
-        let pos = ZOOM_LEVELS_LUT.len() - get_zoom_level(self.zoom);
+        let idx = (ZOOM_LEVELS_LUT.len() - get_zoom_level(self.zoom)) as u32 - 1;
 
-        pos as f64
+        // TODO: turn this into a lut
+        u32::pow(2, idx) as f64
     }
 
-    fn get_tile_range_dimensions(&self) -> (u32, u32) {
-        let tile_in_pixels = (self.get_tile_size_in_world_pixels() * self.zoom) as u32;
+    fn get_tile_range_dimensions(&self) -> (f64, f64) {
+        let tile_in_pixels = self.get_tile_size_in_world_pixels() * self.zoom;
 
-        let width_in_tiles = self.width / tile_in_pixels;
-        let height_in_tiles = self.height / tile_in_pixels;
+        let width_in_tiles = self.width as f64 / tile_in_pixels;
+        let height_in_tiles = self.height as f64 / tile_in_pixels;
 
         (width_in_tiles, height_in_tiles)
     }
 
     pub fn get_slippy_zoom(&self) -> u8 {
-        let z = get_zoom_level(self.zoom);
+        let z = get_zoom_level(self.zoom) + 1;
 
         z as u8
     }
@@ -91,8 +92,6 @@ impl Camera {
         } = self.world_origin();
 
         let (wx, wy) = self.get_tile_range_dimensions();
-        let wx = wx as f64;
-        let wy = wy as f64;
 
         let tile_x = self.x / self.get_tile_size_in_world_pixels();
         let tile_y = self.y / self.get_tile_size_in_world_pixels();
@@ -100,13 +99,11 @@ impl Camera {
         let x = world_origin_x + tile_x;
         let y = world_origin_y + tile_y;
 
-        // TODO: why does zooming cause this calculation to be off by a bit?
+        let min_x = (x - wx / 2.0).floor() as u32;
+        let min_y = (y - wy / 2.0).floor() as u32;
 
-        let min_x = x.floor() as u32 - 1;
-        let min_y = y.floor() as u32 - 1;
-
-        let max_x = (x + wx).ceil() as u32 + 1;
-        let max_y = (y + wy).ceil() as u32 + 1;
+        let max_x = (x + wx / 2.0).ceil() as u32;
+        let max_y = (y + wy / 2.0).ceil() as u32;
 
         ((min_x, min_y), (max_x, max_y))
     }
@@ -203,11 +200,12 @@ impl MapRenderer {
             return;
         };
 
+        let bounds = Rect::new(0.0, 0.0, TILE_SIZEf, TILE_SIZEf);
+
         let hairline_compensation = 0.5;
         scene.push_clip_layer(
             transform,
-            &Rect::new(0.0, 0.0, TILE_SIZEf, TILE_SIZEf)
-                .inflate(hairline_compensation, hairline_compensation),
+            &bounds.inflate(hairline_compensation, hairline_compensation),
         );
 
         // FIXME: remove unwrap
@@ -221,6 +219,10 @@ impl MapRenderer {
         for feature in road_features {
             self.draw_feature(scene, transform, &feature);
         }
+
+        let stroke = Stroke::new(1.0);
+        let stroke_color = Color::new([1.0, 0.5, 0.0, 1.0]);
+        scene.stroke(&stroke, transform, stroke_color, None, &bounds);
 
         scene.pop_layer();
     }

@@ -42,8 +42,6 @@ fn main() {
             world_origin,
             width: 1,
             height: 1,
-            // toggle_zoom_counter: 0,
-            // controlled_tile_size: false,
         },
         input: Input::default(),
         last_frame_time: Instant::now(),
