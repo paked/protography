@@ -4,7 +4,7 @@ use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Rect, Stroke};
 use vello::peniko::Color;
 
-use crate::pmtiles::{Position, TileCoord, lat_lon_to_xyz};
+use crate::pmtiles::{Position, TileCoord, TileEntry, lat_lon_to_xyz};
 
 pub const TILE_SIZE: u32 = 512;
 pub const TILE_SIZEf: f64 = 512.0;
@@ -219,10 +219,6 @@ impl MapRenderer {
         for feature in road_features {
             self.draw_feature(scene, transform, &feature);
         }
-
-        let stroke = Stroke::new(1.0);
-        let stroke_color = Color::new([1.0, 0.5, 0.0, 1.0]);
-        scene.stroke(&stroke, transform, stroke_color, None, &bounds);
 
         scene.pop_layer();
     }

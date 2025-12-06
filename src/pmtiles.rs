@@ -12,8 +12,10 @@ use std::str::Utf8Error;
 static EXPECTED_MAGIC: &str = "PMTiles";
 const EXPECTED_VERSION: u8 = 3;
 
+pub type Result<T> = std::result::Result<T, PmtilesError>;
+
 #[derive(Debug)]
-pub enum ParseError {
+pub enum PmtilesError {
     InvalidMagic,
     InvalidVersion,
     InvalidUtf8(Utf8Error),
@@ -23,14 +25,14 @@ pub enum ParseError {
     TooHighZIndex,
 }
 
-impl From<std::io::Error> for ParseError {
+impl From<std::io::Error> for PmtilesError {
     fn from(value: std::io::Error) -> Self {
-        ParseError::IoError(value)
+        PmtilesError::IoError(value)
     }
 }
 
 // TODO: make private
-pub fn decompress_range(file: &Vec<u8>, start: usize, end: usize) -> Result<Vec<u8>, Error> {
+pub fn decompress_range(file: &Vec<u8>, start: usize, end: usize) -> Result<Vec<u8>> {
     let compressed_bytes = &file[start..end];
 
     let mut gz = GzDecoder::new(compressed_bytes);
@@ -40,7 +42,7 @@ pub fn decompress_range(file: &Vec<u8>, start: usize, end: usize) -> Result<Vec<
     Ok(bytes)
 }
 
-pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntries, ParseError> {
+pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntries> {
     let root_directory_start = header.root_directory_offset as usize;
     let root_directory_end = root_directory_start + header.root_directory_length as usize;
     let root_directory_bytes = decompress_range(&file, root_directory_start, root_directory_end)?;
@@ -124,17 +126,17 @@ pub struct Header {
     pub center_position: Position,
 }
 
-pub fn parse_header(bytes: &mut Bytes) -> Result<Header, ParseError> {
+pub fn parse_header(bytes: &mut Bytes) -> Result<Header> {
     let magic = bytes.split_to(EXPECTED_MAGIC.len()).to_vec();
     let magic = str::from_utf8(&magic).unwrap();
 
     if magic != EXPECTED_MAGIC {
-        return Err(ParseError::InvalidMagic);
+        return Err(PmtilesError::InvalidMagic);
     }
 
     let version = bytes.get_u8();
     if version != EXPECTED_VERSION {
-        return Err(ParseError::InvalidVersion);
+        return Err(PmtilesError::InvalidVersion);
     }
 
     let header = Header {
@@ -171,12 +173,12 @@ enum Clustered {
 }
 
 impl TryFrom<u8> for Clustered {
-    type Error = ParseError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    type Error = PmtilesError;
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::NotClustered),
             1 => Ok(Self::Clustered),
-            _ => Err(ParseError::InvalidValue),
+            _ => Err(PmtilesError::InvalidValue),
         }
     }
 }
@@ -192,8 +194,8 @@ enum TileType {
 }
 
 impl TryFrom<u8> for TileType {
-    type Error = ParseError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    type Error = PmtilesError;
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::MVT),
@@ -201,7 +203,7 @@ impl TryFrom<u8> for TileType {
             3 => Ok(Self::JPEG),
             4 => Ok(Self::WebP),
             5 => Ok(Self::AVIF),
-            _ => Err(ParseError::InvalidValue),
+            _ => Err(PmtilesError::InvalidValue),
         }
     }
 }
@@ -216,15 +218,15 @@ enum Compression {
 }
 
 impl TryFrom<u8> for Compression {
-    type Error = ParseError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    type Error = PmtilesError;
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0x0 => Ok(Self::Unknown),
             0x1 => Ok(Self::None),
             0x2 => Ok(Self::GZip),
             0x3 => Ok(Self::Brotli),
             0x4 => Ok(Self::ZStd),
-            _ => Err(ParseError::InvalidValue),
+            _ => Err(PmtilesError::InvalidValue),
         }
     }
 }
@@ -267,7 +269,7 @@ impl From<u64> for Position {
 
 const VARINT_CONTINUATION_BIT_MASK: u8 = 0b10000000;
 
-fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64, ParseError> {
+fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64> {
     let mut n: u64 = 0;
 
     for i in 0.. {
@@ -275,7 +277,7 @@ fn parse_varint(bytes: &mut bytes::Bytes) -> Result<u64, ParseError> {
         let value = (byte & !VARINT_CONTINUATION_BIT_MASK) as u64;
         n |= value
             .checked_shl(i * 7)
-            .ok_or(ParseError::VarintOverflowError)?;
+            .ok_or(PmtilesError::VarintOverflowError)?;
 
         if byte & VARINT_CONTINUATION_BIT_MASK == 0 {
             break;
@@ -307,13 +309,13 @@ impl TileCoord {
 pub struct TileId(u64);
 
 impl TryFrom<TileCoord> for TileId {
-    type Error = ParseError;
+    type Error = PmtilesError;
 
     // implementation stolen/inspired by https://github.com/arma-place/pmtiles-rs, under MIT license
-    fn try_from(value: TileCoord) -> Result<Self, Self::Error> {
+    fn try_from(value: TileCoord) -> std::result::Result<Self, Self::Error> {
         let TileCoord { z, .. } = value;
         if z > MAX_Z {
-            return Err(ParseError::TooHighZIndex);
+            return Err(PmtilesError::TooHighZIndex);
         }
 
         let x = value.ix();
@@ -330,10 +332,10 @@ impl TryFrom<TileCoord> for TileId {
 }
 
 impl TryFrom<TileId> for TileCoord {
-    type Error = ParseError;
+    type Error = PmtilesError;
 
     // implementation stolen/inspired by https://github.com/arma-place/pmtiles-rs, under MIT license
-    fn try_from(id: TileId) -> Result<Self, Self::Error> {
+    fn try_from(id: TileId) -> std::result::Result<Self, Self::Error> {
         if id.0 == 0 {
             return Ok(TileCoord {
                 x: 0.0,
@@ -360,7 +362,7 @@ impl TryFrom<TileId> for TileCoord {
 
 const MAX_Z: u8 = 32;
 
-fn find_z(id: u64) -> Result<u8, ParseError> {
+fn find_z(id: u64) -> std::result::Result<u8, PmtilesError> {
     let mut z: u8 = 0;
     let mut acc: u64 = 1;
 
@@ -375,7 +377,7 @@ fn find_z(id: u64) -> Result<u8, ParseError> {
     }
 
     if z == 0 {
-        return Err(ParseError::TooHighZIndex);
+        return Err(PmtilesError::TooHighZIndex);
     }
 
     Ok(z)
@@ -412,7 +414,7 @@ pub struct TileManager {
 }
 
 impl TileManager {
-    pub fn new(data: Vec<u8>) -> Result<Self, ParseError> {
+    pub fn new(data: Vec<u8>) -> Result<Self> {
         let mut bytes = Bytes::from(data.clone());
 
         let header = parse_header(&mut bytes)?;
@@ -426,7 +428,7 @@ impl TileManager {
         })
     }
 
-    fn tile_to_mvt_reader(&self, tile: &TileEntry) -> Result<mvt_reader::Reader, ParseError> {
+    fn tile_to_mvt_reader(&self, tile: &TileEntry) -> Result<mvt_reader::Reader> {
         let tile_data_start = (self.header.tile_data_offset + tile.offset) as usize;
         let tile_data_end = tile_data_start + tile.length as usize;
         let tile_data_bytes = decompress_range(&self.data, tile_data_start, tile_data_end)?;
@@ -435,7 +437,7 @@ impl TileManager {
         Ok(mvt_reader::Reader::new(tile_data_bytes).unwrap())
     }
 
-    pub fn get_tile(&self, id: TileId) -> Result<Option<mvt_reader::Reader>, ParseError> {
+    pub fn get_tile(&self, id: TileId) -> Result<Option<mvt_reader::Reader>> {
         let tile = match self.entries.find_tile(id) {
             Some(t) => t,
             None => return Ok(None),

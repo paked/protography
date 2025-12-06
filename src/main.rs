@@ -1,7 +1,9 @@
+mod error;
 mod map_renderer;
 mod pmtiles;
 mod simple_vello;
 
+use error::Result;
 use pmtiles::*;
 use vello::util::RenderContext;
 use winit::event_loop::EventLoop;
@@ -14,7 +16,7 @@ use crate::map_renderer::Camera;
 use crate::map_renderer::MapRenderer;
 use crate::simple_vello::Input;
 
-fn main() {
+fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let path = &args[1];
     let file = fs::read(path).unwrap();
@@ -54,4 +56,6 @@ fn main() {
     event_loop
         .run_app(&mut app)
         .expect("Couldn't run event loop");
+
+    Ok(())
 }
