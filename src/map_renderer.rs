@@ -16,8 +16,6 @@ pub struct Camera {
     pub world_origin: Position,
     pub width: u32,
     pub height: u32,
-    // pub controlled_tile_size: bool,
-    // pub toggle_zoom_counter: u8,
 }
 
 pub const TILE_ZOOM: u8 = 15;

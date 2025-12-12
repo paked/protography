@@ -20,14 +20,25 @@ pub enum PmtilesError {
     InvalidVersion,
     InvalidUtf8(Utf8Error),
     InvalidValue,
-    IoError(std::io::Error),
     VarintOverflowError,
     TooHighZIndex,
+
+    // Stdlib
+    IoError(std::io::Error),
+
+    // External crates
+    MvtReaderError(mvt_reader::error::ParserError),
 }
 
 impl From<std::io::Error> for PmtilesError {
     fn from(value: std::io::Error) -> Self {
         PmtilesError::IoError(value)
+    }
+}
+
+impl From<mvt_reader::error::ParserError> for PmtilesError {
+    fn from(value: mvt_reader::error::ParserError) -> Self {
+        PmtilesError::MvtReaderError(value)
     }
 }
 
@@ -306,6 +317,7 @@ impl TileCoord {
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct TileId(u64);
 
 impl TryFrom<TileCoord> for TileId {
@@ -411,6 +423,11 @@ pub struct TileManager {
     data: Vec<u8>,
     pub header: Header,
     entries: TileEntries,
+
+    // TODO: this should probably be a smarter structure. Hashing a tile id is a bit redundant,
+    //  since it's already a number. Should store tiles as "chunks", and index via their slippy coords
+    //  which guarantees they'll be close in memory.
+    loaded_tiles: HashMap<TileId, mvt_reader::Reader>,
 }
 
 impl TileManager {
@@ -425,6 +442,7 @@ impl TileManager {
             data,
             header,
             entries,
+            loaded_tiles: HashMap::new(),
         })
     }
 
@@ -433,18 +451,21 @@ impl TileManager {
         let tile_data_end = tile_data_start + tile.length as usize;
         let tile_data_bytes = decompress_range(&self.data, tile_data_start, tile_data_end)?;
 
-        // fixme: don't unwrap here
-        Ok(mvt_reader::Reader::new(tile_data_bytes).unwrap())
+        Ok(mvt_reader::Reader::new(tile_data_bytes)?)
     }
 
-    pub fn get_tile(&self, id: TileId) -> Result<Option<mvt_reader::Reader>> {
-        let tile = match self.entries.find_tile(id) {
-            Some(t) => t,
-            None => return Ok(None),
-        };
+    pub fn get_tile(&mut self, id: TileId) -> Result<Option<&mvt_reader::Reader>> {
+        if !self.loaded_tiles.contains_key(&id) {
+            let tile_entry = match self.entries.find_tile(id) {
+                Some(t) => t,
+                None => return Ok(None),
+            };
 
-        let mvt = self.tile_to_mvt_reader(tile)?;
-        Ok(Some(mvt))
+            let tile = self.tile_to_mvt_reader(tile_entry)?;
+            self.loaded_tiles.insert(id, tile);
+        }
+
+        Ok(self.loaded_tiles.get(&id))
     }
 }
 
