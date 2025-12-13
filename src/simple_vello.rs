@@ -3,23 +3,21 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use vello::kurbo::{Affine, Circle, Ellipse, Line, Rect, RoundedRect, Stroke};
+use vello::kurbo::{Affine, Circle, Stroke};
 use vello::peniko::Color;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
-use vello::wgpu::wgc::command::TransferError;
 use vello::{AaConfig, Renderer, RendererOptions, Scene};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{self, ElementState, WindowEvent};
+use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
-use winit::platform::scancode;
 use winit::window::Window;
 
 use vello::wgpu;
 
-use crate::map_renderer::{Camera, MapRenderer, TILE_SIZEf, TILE_ZOOM};
+use crate::map_renderer::{Camera, MapRenderer};
 use crate::pmtiles::{TileCoord, TileId, TileManager};
 
 #[derive(Debug)]
@@ -115,11 +113,11 @@ impl ApplicationHandler for SimpleVelloApp {
                 self.input.mouse_dx = delta.0;
                 self.input.mouse_dy = delta.1;
             }
-            winit::event::DeviceEvent::MouseWheel { delta } => {
-                if let winit::event::MouseScrollDelta::PixelDelta(delta) = delta {
-                    self.input.mouse_wheel_dx = delta.x;
-                    self.input.mouse_wheel_dy = delta.y;
-                }
+            winit::event::DeviceEvent::MouseWheel {
+                delta: winit::event::MouseScrollDelta::PixelDelta(delta),
+            } => {
+                self.input.mouse_wheel_dx = delta.x;
+                self.input.mouse_wheel_dy = delta.y;
             }
             _ => (),
         }

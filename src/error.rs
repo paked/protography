@@ -4,7 +4,7 @@ pub type Result<T> = std::result::Result<T, ProtographyError>;
 
 #[derive(Debug)]
 pub enum ProtographyError {
-    GenericError,
+    #[allow(dead_code)]
     PmtilesError(PmtilesError),
 }
 

@@ -4,10 +4,8 @@ use flate2::read::GzDecoder;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
-use std::io::Error;
 use std::io::Read;
 use std::str;
-use std::str::Utf8Error;
 
 static EXPECTED_MAGIC: &str = "PMTiles";
 const EXPECTED_VERSION: u8 = 3;
@@ -18,15 +16,16 @@ pub type Result<T> = std::result::Result<T, PmtilesError>;
 pub enum PmtilesError {
     InvalidMagic,
     InvalidVersion,
-    InvalidUtf8(Utf8Error),
     InvalidValue,
     VarintOverflowError,
     TooHighZIndex,
 
     // Stdlib
+    #[allow(dead_code)]
     IoError(std::io::Error),
 
     // External crates
+    #[allow(dead_code)]
     MvtReaderError(mvt_reader::error::ParserError),
 }
 
@@ -42,8 +41,7 @@ impl From<mvt_reader::error::ParserError> for PmtilesError {
     }
 }
 
-// TODO: make private
-pub fn decompress_range(file: &Vec<u8>, start: usize, end: usize) -> Result<Vec<u8>> {
+fn decompress_range(file: &[u8], start: usize, end: usize) -> Result<Vec<u8>> {
     let compressed_bytes = &file[start..end];
 
     let mut gz = GzDecoder::new(compressed_bytes);
@@ -53,10 +51,10 @@ pub fn decompress_range(file: &Vec<u8>, start: usize, end: usize) -> Result<Vec<
     Ok(bytes)
 }
 
-pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntries> {
+pub fn parse_root_directory(file: &[u8], header: &Header) -> Result<TileEntries> {
     let root_directory_start = header.root_directory_offset as usize;
     let root_directory_end = root_directory_start + header.root_directory_length as usize;
-    let root_directory_bytes = decompress_range(&file, root_directory_start, root_directory_end)?;
+    let root_directory_bytes = decompress_range(file, root_directory_start, root_directory_end)?;
 
     let mut bytes = Bytes::from(root_directory_bytes);
 
@@ -67,7 +65,7 @@ pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntri
     let mut last_id = 0;
     for tile in tile_entries.iter_mut() {
         let id_delta = parse_varint(&mut bytes)?;
-        last_id = last_id + id_delta;
+        last_id += id_delta;
 
         tile.id = last_id;
     }
@@ -113,6 +111,7 @@ pub fn parse_root_directory(file: &Vec<u8>, header: &Header) -> Result<TileEntri
 
 // PMTiles V3 Header.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Header {
     root_directory_offset: u64,
     root_directory_length: u64,
@@ -197,11 +196,11 @@ impl TryFrom<u8> for Clustered {
 #[derive(Debug)]
 enum TileType {
     Unknown,
-    MVT,
-    PNG,
-    JPEG,
+    Mvt,
+    Png,
+    Jpeg,
     WebP,
-    AVIF,
+    Avif,
 }
 
 impl TryFrom<u8> for TileType {
@@ -209,11 +208,11 @@ impl TryFrom<u8> for TileType {
     fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Unknown),
-            1 => Ok(Self::MVT),
-            2 => Ok(Self::PNG),
-            3 => Ok(Self::JPEG),
+            1 => Ok(Self::Mvt),
+            2 => Ok(Self::Png),
+            3 => Ok(Self::Jpeg),
             4 => Ok(Self::WebP),
-            5 => Ok(Self::AVIF),
+            5 => Ok(Self::Avif),
             _ => Err(PmtilesError::InvalidValue),
         }
     }
@@ -336,8 +335,7 @@ impl TryFrom<TileCoord> for TileId {
         // FIXME: precompute this
         let base_id: u64 = 1 + (1..z).map(|i| 4u64.pow(u32::from(i))).sum::<u64>();
 
-        // FIXME: should x, y just be u32?
-        let id = TileId(fast_hilbert::xy2h(x as u32, y as u32, z) + base_id);
+        let id = TileId(fast_hilbert::xy2h(x, y, z) + base_id);
 
         Ok(id)
     }
@@ -357,7 +355,6 @@ impl TryFrom<TileId> for TileCoord {
         }
 
         // TODO: pre-compute these base_id and z values
-
         let z = find_z(id.0)?;
 
         let base_id: u64 = 1 + (1..z).map(|i| 4u64.pow(u32::from(i))).sum::<u64>();
@@ -400,13 +397,14 @@ pub fn lat_lon_to_xyz(lat: f64, lon: f64, zoom: u8) -> TileCoord {
     let lat_rad = lat.to_radians();
     let n = 2f64.powi(zoom as i32);
 
-    let x = ((lon + 180.0) / 360.0 * n)/*.floor() as u32*/;
-    let y = ((1.0 - (lat_rad.tan().asinh() / std::f64::consts::PI)) / 2.0 * n)/*.floor() as u32*/;
+    let x = (lon + 180.0) / 360.0 * n;
+    let y = (1.0 - (lat_rad.tan().asinh() / std::f64::consts::PI)) / 2.0 * n;
 
     TileCoord { x, y, z: zoom }
 }
 
 // From chatgpt
+#[allow(dead_code)]
 pub fn xyz_to_lat_lon(x: u32, y: u32, zoom: u8) -> Position {
     let n = 2f64.powi(zoom as i32);
     let lon = x as f64 / n * 360.0 - 180.0;

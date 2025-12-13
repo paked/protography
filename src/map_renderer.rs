@@ -4,10 +4,9 @@ use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Rect, Stroke};
 use vello::peniko::Color;
 
-use crate::pmtiles::{Position, TileCoord, TileEntry, lat_lon_to_xyz};
+use crate::pmtiles::{Position, TileCoord, lat_lon_to_xyz};
 
-pub const TILE_SIZE: u32 = 512;
-pub const TILE_SIZEf: f64 = 512.0;
+pub const TILE_SIZE: f64 = 512.0;
 
 pub struct Camera {
     pub x: f64,
@@ -17,8 +16,6 @@ pub struct Camera {
     pub width: u32,
     pub height: u32,
 }
-
-pub const TILE_ZOOM: u8 = 15;
 
 // TODO: these small values of zoom are probably not usable. find a better way to represent this
 const ZOOM_LEVELS_LUT: [f64; 15] = [
@@ -49,7 +46,7 @@ fn get_zoom_level(zoom: f64) -> usize {
 
 impl Camera {
     pub fn get_tile_size_in_world_pixels(&self) -> f64 {
-        TILE_SIZEf * self.get_tile_size_multipler()
+        TILE_SIZE * self.get_tile_size_multipler()
     }
 
     pub fn get_tile_size_multipler(&self) -> f64 {
@@ -120,11 +117,11 @@ impl MapRenderer {
 
         if let Some(first) = line.points().next() {
             // TODO: this transformation should be a transformation
-            let first = first / 4096.0 * TILE_SIZEf as f32;
+            let first = first / 4096.0 * TILE_SIZE as f32;
             path.move_to((first.x(), first.y()));
 
             for next in line.points().skip(1) {
-                let next = next / 4096.0 * TILE_SIZEf as f32;
+                let next = next / 4096.0 * TILE_SIZE as f32;
                 path.line_to((next.x(), next.y()));
             }
         }
@@ -198,7 +195,7 @@ impl MapRenderer {
             return;
         };
 
-        let bounds = Rect::new(0.0, 0.0, TILE_SIZEf, TILE_SIZEf);
+        let bounds = Rect::new(0.0, 0.0, TILE_SIZE, TILE_SIZE);
 
         let hairline_compensation = 0.5;
         scene.push_clip_layer(
