@@ -32,7 +32,7 @@ pub enum RenderState {
     Suspended(Option<Arc<Window>>),
 }
 
-pub struct SimpleVelloApp {
+pub struct App {
     /// The Vello `RenderContext` which is a global context that lasts for the
     /// lifetime of the application
     pub context: RenderContext,
@@ -58,7 +58,7 @@ pub struct SimpleVelloApp {
     pub last_frame_time: Instant,
 }
 
-impl ApplicationHandler for SimpleVelloApp {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let RenderState::Suspended(cached_window) = &mut self.state else {
             return;

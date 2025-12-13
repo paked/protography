@@ -1,7 +1,7 @@
+mod app;
 mod error;
 mod map_renderer;
 mod pmtiles;
-mod simple_vello;
 
 use error::Result;
 use pmtiles::*;
@@ -12,9 +12,9 @@ use std::env;
 use std::fs;
 use std::time::Instant;
 
+use crate::app::Input;
 use crate::map_renderer::Camera;
 use crate::map_renderer::MapRenderer;
-use crate::simple_vello::Input;
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -30,10 +30,10 @@ fn main() -> Result<()> {
     };
 
     // Setup a bunch of state:
-    let mut app = simple_vello::SimpleVelloApp {
+    let mut app = app::App {
         context: RenderContext::new(),
         renderers: vec![],
-        state: simple_vello::RenderState::Suspended(None),
+        state: app::RenderState::Suspended(None),
         scene: vello::Scene::new(),
         map_renderer: MapRenderer::new(),
         tile_manager,
