@@ -172,8 +172,14 @@ impl ApplicationHandler for SimpleVelloApp {
 
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Key::Named(key) = event.logical_key {
-                    if key == NamedKey::Space {
-                        self.input.is_space_pressed = event.state.is_pressed() && !event.repeat;
+                    match key {
+                        NamedKey::Space => {
+                            self.input.is_space_pressed = event.state.is_pressed() && !event.repeat
+                        }
+                        NamedKey::Shift => {
+                            self.input.is_shift_pressed = event.state.is_pressed() && !event.repeat
+                        }
+                        _ => (),
                     }
                 }
             }
@@ -295,7 +301,7 @@ impl ApplicationHandler for SimpleVelloApp {
                         )) * transform;
 
                         self.map_renderer
-                            .render_to_scene(&tile, &mut self.scene, transform);
+                            .render_to_scene(tile, &mut self.scene, transform);
                     }
                 }
 
@@ -399,4 +405,5 @@ pub struct Input {
     mouse_wheel_dy: f64,
 
     is_space_pressed: bool,
+    is_shift_pressed: bool,
 }
