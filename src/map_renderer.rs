@@ -1,6 +1,7 @@
 use geo_types::{Geometry, LineString, Polygon};
 use mvt_reader::feature::Feature;
 use vello::Scene;
+use vello::kurbo::simplify::SimplifyOptions;
 use vello::kurbo::{Affine, BezPath, Rect, Stroke};
 use vello::peniko::Color;
 
@@ -184,17 +185,6 @@ impl MapRenderer {
     ) {
         let layer_names = tile.get_layer_names().unwrap(); // FIXME
 
-        let road_layer_id = layer_names.iter().position(|x| x == "roads");
-
-        let Some(road_layer_id) = road_layer_id else {
-            return;
-        };
-
-        let landuse_layer_id = layer_names.iter().position(|x| x == "landuse");
-        let Some(landuse_layer_id) = landuse_layer_id else {
-            return;
-        };
-
         let bounds = Rect::new(0.0, 0.0, TILE_SIZE, TILE_SIZE);
 
         let hairline_compensation = 0.5;
@@ -203,16 +193,22 @@ impl MapRenderer {
             &bounds.inflate(hairline_compensation, hairline_compensation),
         );
 
-        // FIXME: remove unwrap
-        let landuse_features = tile.get_features(landuse_layer_id).unwrap();
-        for feature in landuse_features {
-            self.draw_feature(scene, transform, &feature);
-        }
+        let landuse_layer_id = layer_names.iter().position(|x| x == "landuse");
+        if let Some(landuse_layer_id) = landuse_layer_id {
+            // FIXME: remove unwrap
+            let landuse_features = tile.get_features(landuse_layer_id).unwrap();
+            for feature in landuse_features {
+                self.draw_feature(scene, transform, &feature);
+            }
+        };
 
-        // FIXME: remove unwrap
-        let road_features = tile.get_features(road_layer_id).unwrap();
-        for feature in road_features {
-            self.draw_feature(scene, transform, &feature);
+        let road_layer_id = layer_names.iter().position(|x| x == "roads");
+        if let Some(road_layer_id) = road_layer_id {
+            // FIXME: remove unwrap
+            let road_features = tile.get_features(road_layer_id).unwrap();
+            for feature in road_features {
+                self.draw_feature(scene, transform, &feature);
+            }
         }
 
         scene.pop_layer();

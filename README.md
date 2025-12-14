@@ -2,7 +2,16 @@
 
 To run: `cargo run toolangi.pmtiles`. Other pmtiles archives could work too one day.
 
-Do not use this. I am writing it to learn Rust.
+Do not use this, or judge me too hard for the code within it. I am writing it to learn Rust.
+
+## Adding a new region
+
+* Install the `pmtiles` cli
+* Copy the URL of the latest global pmtiles archive from `https://maps.protomaps.com/builds/` (do not download this file)
+* Create a `your-region.geojson` file containing the bounds of the region you want to explore. An easy way to do this is on https://geojson.io.
+* Run `pmtiles extract <latest-pmtiles-archive-url> --region your-region.geojson your-region.pmtiles`
+
+You can now run `cargo run your-region.pmtiles` and see the viewer!
 
 ## License
 

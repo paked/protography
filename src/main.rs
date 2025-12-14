@@ -23,7 +23,7 @@ fn main() -> Result<()> {
 
     let tile_manager = TileManager::new(file).unwrap();
 
-    println!("setting up vello app");
+    println!("setting up vello app for {:#?}", tile_manager.header);
 
     let world_origin = Position {
         ..tile_manager.header.center_position

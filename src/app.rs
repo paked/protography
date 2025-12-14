@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use vello::kurbo::{Affine, Circle, Stroke};
+use vello::kurbo::{Affine, Circle, Rect, Stroke};
 use vello::peniko::Color;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
@@ -17,7 +17,7 @@ use winit::window::Window;
 
 use vello::wgpu;
 
-use crate::map_renderer::{Camera, MapRenderer};
+use crate::map_renderer::{Camera, MapRenderer, TILE_SIZE};
 use crate::pmtiles::{TileCoord, TileId, TileManager};
 
 #[derive(Debug)]
@@ -272,13 +272,6 @@ impl ApplicationHandler for App {
                         let tile_id = TileId::try_from(tile_coord).unwrap();
                         let tile = self.tile_manager.get_tile(tile_id).unwrap();
 
-                        let tile = match tile {
-                            Some(t) => t,
-                            None => {
-                                continue;
-                            }
-                        };
-
                         let x = x as f64;
                         let y = y as f64;
                         let world_origin_x = world_origin.x;
@@ -297,6 +290,14 @@ impl ApplicationHandler for App {
                             (self.camera.width / 2) as f64,
                             (self.camera.height / 2) as f64,
                         )) * transform;
+
+                        let tile = match tile {
+                            Some(t) => t,
+                            None => {
+                                println!("no tile data");
+                                continue;
+                            }
+                        };
 
                         self.map_renderer
                             .render_to_scene(tile, &mut self.scene, transform);

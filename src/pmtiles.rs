@@ -1,6 +1,7 @@
 use bytes::{Buf, Bytes};
 use flate2::read::GzDecoder;
 
+use core::panic;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
@@ -51,33 +52,32 @@ fn decompress_range(file: &[u8], start: usize, end: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-pub fn parse_root_directory(file: &[u8], header: &Header) -> Result<TileEntries> {
-    let root_directory_start = header.root_directory_offset as usize;
-    let root_directory_end = root_directory_start + header.root_directory_length as usize;
-    let root_directory_bytes = decompress_range(file, root_directory_start, root_directory_end)?;
-
-    let mut bytes = Bytes::from(root_directory_bytes);
+pub fn parse_directory(file: &[u8], start: usize, length: usize) -> Result<Vec<TileEntry>> {
+    let bytes = decompress_range(file, start, start + length)?;
+    let mut bytes = Bytes::from(bytes);
 
     let tile_num = parse_varint(&mut bytes)?;
 
-    let mut tile_entries = vec![TileEntry::default(); tile_num as usize];
+    let mut tile_entries = vec![
+        TileEntry {
+            id: TileId(0),
+            offset: 0,
+            length: 0,
+            run_length: 0
+        };
+        tile_num as usize
+    ];
 
     let mut last_id = 0;
     for tile in tile_entries.iter_mut() {
         let id_delta = parse_varint(&mut bytes)?;
         last_id += id_delta;
 
-        tile.id = last_id;
+        tile.id = TileId(last_id);
     }
 
     for tile in tile_entries.iter_mut() {
         let run_length = parse_varint(&mut bytes)?;
-
-        // FIXME
-        assert!(
-            run_length != 0,
-            "Run length 0 indicates a leaf entry, which is not implemented"
-        );
 
         tile.run_length = run_length;
     }
@@ -104,9 +104,17 @@ pub fn parse_root_directory(file: &[u8], header: &Header) -> Result<TileEntries>
         last_len = tile.length;
     }
 
-    Ok(TileEntries {
-        entries: tile_entries,
-    })
+    Ok(tile_entries)
+}
+
+pub fn parse_root_directory(file: &[u8], header: &Header) -> Result<Vec<TileEntry>> {
+    let entries = parse_directory(
+        file,
+        header.root_directory_offset as usize,
+        header.root_directory_length as usize,
+    )?;
+
+    Ok(entries)
 }
 
 // PMTiles V3 Header.
@@ -241,22 +249,12 @@ impl TryFrom<u8> for Compression {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TileEntry {
-    pub id: u64,
+    pub id: TileId,
     pub offset: u64,
     pub length: u64,
     pub run_length: u64,
-}
-
-pub struct TileEntries {
-    pub entries: Vec<TileEntry>,
-}
-
-impl TileEntries {
-    pub fn find_tile(&self, id: TileId) -> Option<&TileEntry> {
-        self.entries.iter().find(|e| e.id == id.0)
-    }
 }
 
 #[derive(Debug)]
@@ -316,7 +314,7 @@ impl TileCoord {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Eq, Hash, Clone, Copy, Debug)]
 pub struct TileId(u64);
 
 impl TryFrom<TileCoord> for TileId {
@@ -417,10 +415,17 @@ pub fn xyz_to_lat_lon(x: u32, y: u32, zoom: u8) -> Position {
     Position { lat, long: lon }
 }
 
+pub struct LeafDirectory {
+    start: u64,
+    entries: Vec<TileEntry>,
+}
+
 pub struct TileManager {
     data: Vec<u8>,
     pub header: Header,
-    entries: TileEntries,
+    entries: Vec<TileEntry>,
+
+    leaf_directories: Vec<LeafDirectory>,
 
     // TODO: this should probably be a smarter structure. Hashing a tile id is a bit redundant,
     //  since it's already a number. Should store tiles as "chunks", and index via their slippy coords
@@ -441,6 +446,7 @@ impl TileManager {
             header,
             entries,
             loaded_tiles: HashMap::new(),
+            leaf_directories: Vec::new(),
         })
     }
 
@@ -452,14 +458,77 @@ impl TileManager {
         Ok(mvt_reader::Reader::new(tile_data_bytes)?)
     }
 
+    fn find_or_insert_leaf_directory(&mut self, leaf: &TileEntry) -> &Vec<TileEntry> {
+        assert!(
+            leaf.run_length == 0,
+            "function must only be called for leaf directories"
+        );
+
+        let pos = self
+            .leaf_directories
+            .iter()
+            .position(|dir| dir.start == leaf.id.0);
+
+        if let Some(dir) = pos {
+            return &self.leaf_directories[dir].entries;
+        }
+
+        let start = self.header.leaf_directories_offset + leaf.offset;
+        let entries =
+            parse_directory(&self.data, start as usize, (start + leaf.length) as usize).unwrap();
+
+        self.leaf_directories.push(LeafDirectory {
+            start: leaf.id.0,
+            entries,
+        });
+
+        // FIXME: remove unwrap
+        self.leaf_directories
+            .last()
+            .map(|dir| &dir.entries)
+            .unwrap()
+    }
+
+    fn find_tile(&mut self, id: TileId) -> Option<&TileEntry> {
+        let mut found_idx = None;
+
+        for (i, entry) in self.entries.iter().enumerate() {
+            if entry.id > id {
+                break;
+            }
+
+            found_idx = Some(i);
+        }
+
+        if found_idx.is_none() {
+            println!("no found idx?");
+            panic!("hi");
+        }
+
+        let found_idx = found_idx?;
+
+        if self.entries[found_idx].run_length == 0 {
+            // TODO: split searching/inserting so we don't need to clone here
+            let leaf_entries = self.find_or_insert_leaf_directory(&self.entries[found_idx].clone());
+
+            // TODO: handle run length tile
+            leaf_entries.iter().find(|leaf| id == leaf.id)
+        } else if self.entries[found_idx].id == id {
+            Some(&self.entries[found_idx])
+        } else {
+            None
+        }
+    }
+
     pub fn get_tile(&mut self, id: TileId) -> Result<Option<&mvt_reader::Reader>> {
         if !self.loaded_tiles.contains_key(&id) {
-            let tile_entry = match self.entries.find_tile(id) {
-                Some(t) => t,
+            let tile_entry = match self.find_tile(id) {
+                // TODO(remove clone): bad bad bad
+                Some(t) => t.clone(),
                 None => return Ok(None),
             };
 
-            let tile = self.tile_to_mvt_reader(tile_entry)?;
+            let tile = self.tile_to_mvt_reader(&tile_entry)?;
             self.loaded_tiles.insert(id, tile);
         }
 
