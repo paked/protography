@@ -492,6 +492,7 @@ impl TileManager {
     fn find_tile(&mut self, id: TileId) -> Option<&TileEntry> {
         let mut found_idx = None;
 
+        // TODO: binary search here, and handle run length
         for (i, entry) in self.entries.iter().enumerate() {
             if entry.id > id {
                 break;
@@ -511,8 +512,15 @@ impl TileManager {
             // TODO: split searching/inserting so we don't need to clone here
             let leaf_entries = self.find_or_insert_leaf_directory(&self.entries[found_idx].clone());
 
-            // TODO: handle run length tile
-            leaf_entries.iter().find(|leaf| id == leaf.id)
+            // TODO: binary search here
+            leaf_entries.iter().find(|leaf| {
+                assert!(
+                    leaf.run_length != 0,
+                    "no support for recursive leaf directories"
+                );
+
+                id >= leaf.id && id < TileId(leaf.id.0 + leaf.run_length)
+            })
         } else if self.entries[found_idx].id == id {
             Some(&self.entries[found_idx])
         } else {
