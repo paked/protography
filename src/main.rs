@@ -37,14 +37,7 @@ fn main() -> Result<()> {
         scene: vello::Scene::new(),
         map_renderer: MapRenderer::new(),
         tile_manager,
-        camera: Camera {
-            x: 0.0,
-            y: 0.0,
-            zoom: 1.0,
-            world_origin,
-            width: 1,
-            height: 1,
-        },
+        camera: Camera::new(world_origin),
         input: Input::default(),
         last_frame_time: Instant::now(),
     };

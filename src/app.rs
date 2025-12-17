@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use vello::kurbo::{Affine, Circle, Rect, Stroke};
+use vello::kurbo::{Affine, Circle, Stroke};
 use vello::peniko::Color;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
@@ -202,32 +202,29 @@ impl ApplicationHandler for App {
 
                 if self.input.is_primary_pressed {
                     self.camera.x +=
-                        -self.input.mouse_dx * window.scale_factor() / self.camera.zoom;
+                        -self.input.mouse_dx * window.scale_factor() / self.camera.zoom();
                     self.camera.y +=
-                        -self.input.mouse_dy * window.scale_factor() / self.camera.zoom;
+                        -self.input.mouse_dy * window.scale_factor() / self.camera.zoom();
 
                     self.input.mouse_dx = 0.0;
                     self.input.mouse_dy = 0.0;
                 }
 
                 if self.input.mouse_wheel_dy != 0.0 {
-                    let coefficient = if self.input.mouse_wheel_dy > 0.0 {
-                        1.01
-                    } else {
-                        0.99
-                    };
-                    self.camera.zoom *= coefficient;
+                    self.camera.add_zoom(-self.input.mouse_wheel_dy * 0.001);
+
+                    // self.camera.zoom *= coefficient;
 
                     self.input.mouse_wheel_dy = 0.0;
                 }
 
                 if self.input.is_space_pressed {
-                    self.camera.zoom += 0.0005;
+                    self.camera.add_zoom(0.05);
 
                     self.input.is_space_pressed = false;
                 }
 
-                println!("fps: {}, zoom: {}", 1.0 / delta_time, self.camera.zoom);
+                println!("fps: {}, zoom: {}", 1.0 / delta_time, self.camera.zoom(),);
 
                 println!(
                     "tile size world pixels {}",
@@ -246,7 +243,7 @@ impl ApplicationHandler for App {
 
                 let world_origin = self.camera.world_origin();
 
-                let zoom = Affine::scale(self.camera.zoom);
+                let zoom = Affine::scale(self.camera.zoom());
 
                 let tile_size = self.camera.get_tile_size_in_world_pixels();
 
@@ -294,7 +291,6 @@ impl ApplicationHandler for App {
                         let tile = match tile {
                             Some(t) => t,
                             None => {
-                                println!("no tile data");
                                 continue;
                             }
                         };

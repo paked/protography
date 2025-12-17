@@ -12,7 +12,8 @@ pub const TILE_SIZE: f64 = 512.0;
 pub struct Camera {
     pub x: f64,
     pub y: f64,
-    pub zoom: f64,
+    zoom: f64,
+    raw_zoom: f64,
     pub world_origin: Position,
     pub width: u32,
     pub height: u32,
@@ -46,19 +47,50 @@ fn get_zoom_level(zoom: f64) -> usize {
 }
 
 impl Camera {
+    pub fn new(world_origin: Position) -> Self {
+        let mut cam = Camera {
+            x: 0.0,
+            y: 0.0,
+            zoom: 0.0,
+            raw_zoom: 0.0,
+            world_origin,
+            width: 1,
+            height: 1,
+        };
+
+        cam.update_zoom();
+
+        cam
+    }
+
     pub fn get_tile_size_in_world_pixels(&self) -> f64 {
         TILE_SIZE * self.get_tile_size_multipler()
     }
 
+    pub fn add_zoom(&mut self, n: f64) {
+        self.raw_zoom += n;
+        self.raw_zoom = self.raw_zoom.clamp(0.0, 20.0);
+
+        self.update_zoom();
+    }
+
+    fn update_zoom(&mut self) {
+        self.zoom = 1.0 / f64::powf(2.0, self.raw_zoom);
+    }
+
+    pub fn zoom(&self) -> f64 {
+        self.zoom
+    }
+
     pub fn get_tile_size_multipler(&self) -> f64 {
-        let idx = (ZOOM_LEVELS_LUT.len() - get_zoom_level(self.zoom)) as u32 - 1;
+        let idx = (ZOOM_LEVELS_LUT.len() - get_zoom_level(self.zoom())) as u32 - 1;
 
         // TODO: turn this into a lut
         u32::pow(2, idx) as f64
     }
 
     fn get_tile_range_dimensions(&self) -> (f64, f64) {
-        let tile_in_pixels = self.get_tile_size_in_world_pixels() * self.zoom;
+        let tile_in_pixels = self.get_tile_size_in_world_pixels() * self.zoom();
 
         let width_in_tiles = self.width as f64 / tile_in_pixels;
         let height_in_tiles = self.height as f64 / tile_in_pixels;
@@ -67,7 +99,7 @@ impl Camera {
     }
 
     pub fn get_slippy_zoom(&self) -> u8 {
-        let z = get_zoom_level(self.zoom) + 1;
+        let z = get_zoom_level(self.zoom()) + 1;
 
         z as u8
     }
